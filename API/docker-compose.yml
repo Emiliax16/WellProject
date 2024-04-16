@@ -1,0 +1,11 @@
+version: '3.8' # no es la versión de docker-compose, sino la versión de la sintaxis del archivo
+services:
+  app:
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./API:/usr/src/app
+      - ./API:/usr/src/app/node_modules
