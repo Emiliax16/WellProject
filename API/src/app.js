@@ -6,7 +6,7 @@ app.use(express.json());
 
 // Ruta root
 app.get('/', (req, res) => {
-  res.send('Ruta raíz, holi que tal');
+  res.send('JIJI');
 });
 
 module.exports = app;
