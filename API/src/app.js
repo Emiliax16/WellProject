@@ -1,12 +1,17 @@
 const express = require('express');
+const {
+  requestLogger
+} = require('./middlewares/placeholder.middleware');
+const placeholderRoute = require('./routes/placeholder.route');
+
+// App initialization
 const app = express();
 
-// Middleware para parsear JSON
+// Middlewares
 app.use(express.json());
+app.use(requestLogger);
 
-// Ruta root
-app.get('/', (req, res) => {
-  res.send('JIJI');
-});
+// Rutas
+app.use(placeholderRoute)
 
 module.exports = app;
