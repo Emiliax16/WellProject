@@ -1,14 +1,18 @@
 ## Issues relacionados
 
-n/a
+Link de tarjeta o documento de feature si es que aplica
 
 ## Descripción del problema (en caso de que no exista un issue que lo explique)
 
-Se añaden carpetas y archivos bases para iniciar la configuración del ambiente del proyecto. La gran mayoría de archivos vienen vacíos.
+Descripción completa del problema abordado, debe ser entendido por todos, no sólo por devs.
+
+## Solución propuesta
+
+Explicar detalladamente la solución propuesta
 
 ## Screenshots
 
-n/a
+Pantallazos o gift de los cambios si es que son visuales en la aplicación
 
 ## Cómo probar
 
