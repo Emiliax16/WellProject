@@ -27,24 +27,6 @@ const createWell = async (req, res) => {
   }
 }
 
-const createWellEntry = async (req, res) => {
-  try {
-    console.log(req.body)
-    const well = await Well.findByPk(req.params.id);
-    if (!well) {
-      res.status(404).send({
-        message: 'Well not found'
-      });
-    }
-    const wellData = await WellData.create(req.body);
-    res.json(wellData);
-  } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while creating the Well Entry'
-    });
-  }
-}
-
 const getWellDataByWell = async (req, res) => {
   try {
     const well = await Well.findByPk(req.params.id);
@@ -67,6 +49,5 @@ const getWellDataByWell = async (req, res) => {
 module.exports = {
     getAllWells,
     createWell,
-    createWellEntry,
     getWellDataByWell
 }

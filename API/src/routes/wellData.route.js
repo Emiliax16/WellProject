@@ -1,8 +1,8 @@
 const express = require('express');
 
-const wellDataController = require('../controllers/wellData.controller');
+const { createWellData } = require('../controllers/wellData.controller');
 const router = express.Router();
 
-router.post('/wellData', wellDataController);
+router.post('/wellData', createWellData);
 
 module.exports = router;
