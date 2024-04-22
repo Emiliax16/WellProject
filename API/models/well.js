@@ -14,7 +14,12 @@ module.exports = (sequelize, DataTypes) => {
     name: DataTypes.STRING,
     location: DataTypes.STRING,
     is_actived: DataTypes.BOOLEAN,
-    client_id: DataTypes.INTEGER
+    client_id: DataTypes.INTEGER,
+    code: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    }
   }, {
     sequelize,
     modelName: 'well',
