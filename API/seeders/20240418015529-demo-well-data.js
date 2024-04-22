@@ -4,7 +4,7 @@
 module.exports = {
   async up (queryInterface, Sequelize) {
     await queryInterface.bulkInsert('wellData', [{
-      code: '1234',
+      code: 'WELL-DUMMY-1',
       date: '21-03-2021',
       hour: '12:00:00',
       well_id: 1,
@@ -14,7 +14,7 @@ module.exports = {
       createdAt: new Date(),
       updatedAt: new Date()
     }, {
-      code: '12345',
+      code: 'WELL-DUMMY-1',
       date: '21-03-2021',
       hour: '12:10:00',
       well_id: 1,
