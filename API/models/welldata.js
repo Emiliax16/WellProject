@@ -10,14 +10,13 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      wellData.belongsTo(models.well, { foreignKey: 'well_id' });
+      wellData.belongsTo(models.well, { foreignKey: 'code', targetKey: 'code' });
     }
   }
   wellData.init({
     code: DataTypes.STRING,
     date: DataTypes.STRING,
     hour: DataTypes.STRING,
-    well_id: DataTypes.INTEGER,
     totalizador: DataTypes.INTEGER,
     caudal: DataTypes.INTEGER,
     nivel_freatico: DataTypes.INTEGER

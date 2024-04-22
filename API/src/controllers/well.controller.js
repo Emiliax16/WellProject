@@ -29,7 +29,7 @@ const createWell = async (req, res) => {
 
 const getWellDataByWell = async (req, res) => {
   try {
-    const well = await Well.findByPk(req.params.id);
+    const well = await Well.findOne({ where: { id: req.params.id } });
     if (!well) {
       res.status(404).send({
         message: 'Well not found'

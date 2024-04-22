@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // Well tendrá dos asociaciones, una con Client (belongsTo) y otra con WellData (hasMany)
       // Para la demo, se usará información dummy
-      well.hasMany(models.wellData, { foreignKey: 'well_id' });
+      well.hasMany(models.wellData, { foreignKey: 'code', sourceKey: 'code' });
     }
   }
   well.init({
@@ -18,7 +18,8 @@ module.exports = (sequelize, DataTypes) => {
     code: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true
+      unique: true,
+      primaryKey: true
     }
   }, {
     sequelize,
