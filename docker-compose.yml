@@ -1,0 +1,36 @@
+version: '3.8' # no es la versión de docker-compose, sino la versión de la sintaxis del archivo
+x-defaults-container: &container-defaults
+  restart: unless-stopped
+  stop_grace_period: 3s
+services:
+  api:
+    build:
+      context: ./API
+      dockerfile: development.Dockerfile
+      args:
+        API_PORT: 3000
+        NODE_VERSION: 21-alpine
+    container_name: api
+    env_file:
+      - .env
+    volumes:
+      - ./API:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - 3000:3000
+    depends_on:
+      - db
+    <<: *container-defaults
+  db:
+    image: postgres:14.11-alpine3.19  # Usa la imagen más reciente de PostgreSQL
+    environment:
+      POSTGRES_DB: ${DB_NAME}   # Nombre de la base de datos
+      POSTGRES_USER: ${DB_USERNAME}     # Usuario de la base de datos
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  # Contraseña del usuario
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persiste los datos entre reinicios del contenedor
+    ports:
+      - "5432:5432"  # Mapea el puerto 5432 del contenedor al mismo puerto en el host
+    <<: *container-defaults
+volumes:
+  postgres_data:   # Define el volumen para almacenar datos
