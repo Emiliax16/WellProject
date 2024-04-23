@@ -15,7 +15,8 @@ const getUsers = async (req, res, next) => {
 const registerUser = async (req, res, next) => {
   try {
     const user = await User.create(req.body)
-    res.json(user)
+    const token = await user.generateToken()
+    res.json({user, token})
   } catch (error) {
     next(error)
   }
@@ -32,7 +33,7 @@ const loginUser = async (req, res, next) => {
     if (!isValid) {
       throw new ErrorHandler(passwordsDontMatch)
     }
-    const token = user.generateToken()
+    const token = await user.generateToken()
     res.status(201).json({ user, token })
   }
   catch (error) {

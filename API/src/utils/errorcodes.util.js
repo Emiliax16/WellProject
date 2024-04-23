@@ -13,8 +13,14 @@ const missingParams = {
   message: 'Faltan parametros.',
 }
 
+const unauthorized = {
+  code: 401,
+  message: 'Recurso no autorizado.',
+}
+
 module.exports = {
   userNotFound,
   missingParams,
   passwordsDontMatch,
+  unauthorized,
 }

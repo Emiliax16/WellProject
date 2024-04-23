@@ -18,7 +18,7 @@ const registerParams = {
     type: 'string',
     required: true,
   },
-  password: {
+  encrypted_password: {
     type: 'string',
     required: true,
   },
@@ -26,7 +26,10 @@ const registerParams = {
     type: 'integer',
     required: true,
   },
-  
+  status: {
+    type: 'boolean',
+    required: true,
+  }, 
 }
 
 module.exports = {
