@@ -1,4 +1,3 @@
-const { default: AsyncQueue } = require('sequelize/lib/dialects/mssql/async-queue');
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const { userNotFound, passwordsDontMatch } = require('../utils/errorcodes.util');
