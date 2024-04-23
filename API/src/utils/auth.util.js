@@ -6,16 +6,18 @@ require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 const BCRYPT_SALT_ROUNDS = process.env.BCRYPT_SALT_ROUNDS || 10;
 
-function generateToken(user) {
+async function generateToken(user) {
+  const { type } = await user.getRole();
   const payload = {
     id: user.id,
-    type: user.getRole().type,
+    type: type,
   };
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 }
 
 function decodeToken(token) {
   try {
+    console.log("checking")
     return jwt.verify(token, JWT_SECRET);
   } catch (error) {
     console.error('Error decoding token:', error);
