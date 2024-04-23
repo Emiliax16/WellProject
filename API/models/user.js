@@ -36,8 +36,8 @@ module.exports = (sequelize, DataTypes) => {
     modelName: 'user',
   });
 
-  user.prototype.generateToken = function () {
-    return generateToken(this);
+  user.prototype.generateToken = async function () {
+    return await generateToken(this);
   }
 
   user.prototype.checkPassword = async function (password) {
