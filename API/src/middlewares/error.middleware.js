@@ -1,8 +1,9 @@
 const { ValidationError, ConnectionError, DatabaseError } = require('sequelize');
 const ErrorHandler = require('../utils/error.util');
 
+
 const errorHandler = (err, req, res, next) => {
-  console.log(err)
+  // Si se necesita mas detalle para el error, se puede console.log(err)
   console.log(`Error 🚨 | ${err.message} while sending a ${req.method} to ${req.originalUrl}`);
   if (err instanceof ValidationError) {
     const messages = err.errors.map((error) => error.message);

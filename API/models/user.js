@@ -1,6 +1,4 @@
 'use strict';
-
-const { Hooks } = require('sequelize/lib/hooks');
 const { hashPassword, comparePassword, generateToken } = require('../src/utils/auth.util');
 
 const {
@@ -28,7 +26,6 @@ module.exports = (sequelize, DataTypes) => {
   {
     hooks: {
       beforeCreate: async (user) => {
-        console.log('beforeCreate hook');
         user.encrypted_password = await hashPassword(user.encrypted_password);
       }
     },

@@ -6,13 +6,13 @@ function validateParams(paramsSpec) {
 
     for (const [key, value] of Object.entries(paramsSpec)) {
       const paramValue = req.body[key];
-      if (value.required && (paramValue === undefined || paramValue === null || paramValue === '')) {
+      if (value.required && paramValue) {
         errors.push(`${key}`);
       }
     }
 
     if (errors.length > 0) {
-      const message = `Faltan parametro(s) requerido(s): ${errors.join(', ')}`;
+      const message = `Faltan parámetro(s) requerido(s): ${errors.join(', ')}`;
       throw new ErrorHandler({
         message: message,
         code: 400,
