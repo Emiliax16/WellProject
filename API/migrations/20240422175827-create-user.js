@@ -21,7 +21,7 @@ module.exports = {
       roleId: {
         type: Sequelize.INTEGER
       },
-      status: {
+      isActived: {
         type: Sequelize.BOOLEAN
       },
       createdAt: {

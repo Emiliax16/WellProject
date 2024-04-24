@@ -21,7 +21,7 @@ module.exports = (sequelize, DataTypes) => {
     email: DataTypes.STRING,
     encrypted_password: DataTypes.STRING,
     roleId: DataTypes.INTEGER,
-    status: DataTypes.BOOLEAN
+    isActived: DataTypes.BOOLEAN
   }, 
   {
     hooks: {
