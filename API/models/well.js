@@ -12,9 +12,19 @@ module.exports = (sequelize, DataTypes) => {
   }
   well.init({
     name: DataTypes.STRING,
-    location: DataTypes.STRING,
-    is_actived: DataTypes.BOOLEAN,
-    client_id: DataTypes.INTEGER,
+    location: {
+      allowNull: false,
+      type: DataTypes.STRING
+    },
+    isActived: {
+      allowNull: false,
+      defaultValue: false,
+      type: DataTypes.BOOLEAN
+    },
+    clientId: {
+      allowNull: false,
+      type: DataTypes.INTEGER
+    },
     code: {
       type: DataTypes.STRING,
       allowNull: false,
