@@ -8,17 +8,17 @@ module.exports = {
     await queryInterface.bulkInsert('wells', [{ // bulkInsert inserta múltiples registros en la tabla Wells
       name: 'Well dummy 1',
       location: faker.location.streetAddress(),
-      is_actived: true,
+      isActived: true,
       code: 'WELL-DUMMY-1',
-      client_id: 1,
+      clientId: 1,
       createdAt: new Date(),
       updatedAt: new Date()
     }, {
       name: 'Well dummy 2',
       location: faker.location.streetAddress(),
-      is_actived: true,
+      isActived: true,
       code: 'WELL-DUMMY-2',
-      client_id: 1,
+      clientId: 1,
       createdAt: new Date(),
       updatedAt: new Date()
     }], {});

@@ -14,12 +14,33 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   wellData.init({
-    code: DataTypes.STRING,
-    date: DataTypes.STRING,
-    hour: DataTypes.STRING,
-    totalizador: DataTypes.INTEGER,
-    caudal: DataTypes.INTEGER,
-    nivel_freatico: DataTypes.INTEGER
+    code: {
+      allowNull: false,
+      max: 20,
+      type: DataTypes.STRING
+    },
+    date: {
+      allowNull: false,
+        isDate: true,
+        type: DataTypes.STRING
+    },
+    hour: {
+      allowNull: false,
+      type: DataTypes.STRING
+    },
+    totalizador: {
+      allowNull: false,
+      type: DataTypes.INTEGER
+    },
+    caudal: {
+      allowNull: false,
+      isDecimal: true,
+      type: DataTypes.INTEGER
+    },
+    nivel_freatico: {
+      allowNull: false,
+      type: DataTypes.INTEGER
+    },
   }, {
     sequelize,
     modelName: 'wellData',

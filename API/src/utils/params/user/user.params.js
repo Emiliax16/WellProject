@@ -26,7 +26,7 @@ const registerParams = {
     type: 'integer',
     required: true,
   },
-  status: {
+  isActived: {
     type: 'boolean',
     required: true,
   }, 

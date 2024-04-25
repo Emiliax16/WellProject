@@ -17,11 +17,29 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   user.init({
-    name: DataTypes.STRING,
-    email: DataTypes.STRING,
-    encrypted_password: DataTypes.STRING,
-    roleId: DataTypes.INTEGER,
-    status: DataTypes.BOOLEAN
+    name: {
+      allowNull: false,
+      type: DataTypes.STRING
+    },
+    email: {
+      allowNull: false,
+      isEmail: true,
+      type: DataTypes.STRING
+    },
+    encrypted_password: {
+      allowNull: false,
+      type: DataTypes.STRING
+    },
+    roleId: {
+      allowNull: false,
+      defaultValue: 2,
+      type: DataTypes.INTEGER
+    },
+    isActived: {
+      allowNull: false,
+      defaultValue: true,
+      type: DataTypes.BOOLEAN
+    },
   }, 
   {
     hooks: {

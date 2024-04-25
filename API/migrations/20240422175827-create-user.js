@@ -10,18 +10,26 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       name: {
+        allowNull: false,
         type: Sequelize.STRING
       },
       email: {
+        allowNull: false,
+        isEmail: true,
         type: Sequelize.STRING
       },
       encrypted_password: {
+        allowNull: false,
         type: Sequelize.STRING
       },
       roleId: {
+        allowNull: false,
+        defaultValue: 2,
         type: Sequelize.INTEGER
       },
-      status: {
+      isActived: {
+        allowNull: false,
+        defaultValue: true,
         type: Sequelize.BOOLEAN
       },
       createdAt: {

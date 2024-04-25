@@ -10,14 +10,16 @@ describe('User model', () => {
   it('should associate with Role', async () => {
     const role = await sequelize.models.role.create({
       type: "admin",
-      description: "",
+      description: "Administrator role",
       isAdmin: true
     });
 
     const user = await sequelize.models.user.create({
       name: 'Jpoezi',
       email: 'jp@gmail.com',
+      encrypted_password: '123456',
       roleId: role.id,
+      isActived: true
     });
 
     const associatedRole = await user.getRole();
@@ -28,6 +30,9 @@ describe('User model', () => {
     const user = await sequelize.models.user.create({
       name: 'Jpoezi',
       email: 'jp@gmail.com',
+      encrypted_password: '123456',
+      roleId: 1,
+      isActived: true
     });
 
     const person = await sequelize.models.person.create({

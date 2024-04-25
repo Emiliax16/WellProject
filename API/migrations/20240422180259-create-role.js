@@ -10,12 +10,17 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       type: {
+        allowNull: false,
+        defaultValue: 'normal',
         type: Sequelize.STRING
       },
       description: {
+        allowNull: false,
         type: Sequelize.STRING
       },
       isAdmin: {
+        allowNull: false,
+        defaultValue: false,
         type: Sequelize.BOOLEAN
       },
       createdAt: {

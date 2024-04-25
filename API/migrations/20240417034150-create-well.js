@@ -13,12 +13,16 @@ module.exports = {
         type: Sequelize.STRING
       },
       location: {
+        allowNull: false,
         type: Sequelize.STRING
       },
-      is_actived: {
+      isActived: {
+        allowNull: false,
+        defaultValue: false,
         type: Sequelize.BOOLEAN
       },
-      client_id: {
+      clientId: {
+        allowNull: false,
         type: Sequelize.INTEGER
       },
       createdAt: {

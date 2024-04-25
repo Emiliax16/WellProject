@@ -14,9 +14,20 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   role.init({
-    type: DataTypes.STRING,
-    description: DataTypes.STRING,
-    isAdmin: DataTypes.BOOLEAN
+    type: {
+      allowNull: false,
+      defaultValue: 'normal',
+      type: DataTypes.STRING
+    },
+    description: {
+      allowNull: false,
+      type: DataTypes.STRING
+    },
+    isAdmin: {
+      allowNull: false,
+      defaultValue: false,
+      type: DataTypes.BOOLEAN
+    },
   }, {
     sequelize,
     modelName: 'role',
