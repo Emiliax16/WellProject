@@ -1,12 +1,13 @@
 const { decodeToken } = require('../utils/auth.util');
-const { unauthorized } = require('../utils/errorcodes.util');
+const { unauthorized, missingToken } = require('../utils/errorcodes.util');
 const ErrorHandler = require('../utils/error.util');
 
 const authMiddleware = (...role) => {
   return async (req, res, next) => {
     try {
-      console.log("Additional Param:", role); // Uso del parámetro adicional
-
+      if (!req.headers.authorization) {
+        throw new ErrorHandler(missingToken);
+      }
       const token = req.headers.authorization.split(' ')[1];
       const decoded = decodeToken(token);
       if (!decoded) {
