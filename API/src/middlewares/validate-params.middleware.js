@@ -6,7 +6,7 @@ function validateParams(paramsSpec) {
 
     for (const [key, value] of Object.entries(paramsSpec)) {
       const paramValue = req.body[key];
-      if (value.required && paramValue) {
+      if (value.required && (paramValue == undefined || paramValue == null || paramValue == '')) {
         errors.push(`${key}`);
       }
     }
