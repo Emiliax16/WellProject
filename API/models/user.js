@@ -60,5 +60,11 @@ module.exports = (sequelize, DataTypes) => {
     return await comparePassword(password, this.encrypted_password);
   }
 
+  user.prototype.createPerson = async function (personParams, Person) {
+    personParams.userId = this.id;
+    const person = await Person.create(personParams);
+    return person;
+  }
+
   return user;
 };

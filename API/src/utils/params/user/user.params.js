@@ -10,6 +10,18 @@ const loginParams = {
 }
 
 const registerParams = {
+  fullName: {
+    type: 'string',
+    required: true,
+  },
+  location: {
+    type: 'string',
+    required: true,
+  },
+  phoneNumber: {
+    type: 'string',
+    required: true,
+  },
   name: {
     type: 'string',
     required: true,
@@ -17,6 +29,10 @@ const registerParams = {
   email: {
     type: 'string',
     required: true,
+  },
+  personalEmail: {
+    type: 'string',
+    required: false,
   },
   encrypted_password: {
     type: 'string',
@@ -29,7 +45,8 @@ const registerParams = {
   isActived: {
     type: 'boolean',
     required: true,
-  }, 
+  },
+
 }
 
 module.exports = {
