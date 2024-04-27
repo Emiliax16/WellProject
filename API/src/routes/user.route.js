@@ -11,7 +11,7 @@ const {
 
 const router = express.Router();
 
-router.get('/users/register', getUsers);
+router.get('/users', getUsers);
 router.get('/users/info', authMiddleware('normal', 'admin'), getUserInfo);
 router.post('/users/register',  validateParams(registerParams), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
