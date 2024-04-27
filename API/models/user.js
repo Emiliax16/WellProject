@@ -14,6 +14,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       user.hasOne(models.person, { foreignKey: 'userId' });
       user.belongsTo(models.role, { foreignKey: 'roleId' });
+      user.hasOne(models.client, { foreignKey: 'userId' });
     }
   }
   user.init({
@@ -46,7 +47,12 @@ module.exports = (sequelize, DataTypes) => {
     hooks: {
       beforeCreate: async (user) => {
         user.encrypted_password = await hashPassword(user.encrypted_password);
-      }
+      },
+      afterCreate: async (user) => {
+        if (user.roleId === 1) return;
+        const client = sequelize.models.client;
+        await client.create({ userId: user.id })
+      },
     },
     sequelize,
     modelName: 'user',
