@@ -13,6 +13,17 @@ const getUsers = async (req, res, next) => {
   }
 }
 
+const getUserInfo = async (req, res, next) => {
+  try {
+    const { id } = req.user
+    const user = await User.findByPk(id, { exclude: ['encrypted_password']})
+    res.json(user)
+  } catch (error) {
+    next(error)
+  }
+}
+
+
 const registerUser = async (req, res, next) => {
   try {
     // Separar atributos del body que son de User y Person
@@ -64,6 +75,7 @@ const loginUser = async (req, res, next) => {
 module.exports = {
   getUsers,
   registerUser,
+  getUserInfo,
   loginUser,
 }
 
