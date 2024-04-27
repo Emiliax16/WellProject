@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const requestLogger = require('./middlewares/placeholder.middleware');
 const errorHandler = require('./middlewares/error.middleware');
 const placeholderRoute = require('./routes/placeholder.route');
@@ -10,6 +11,7 @@ const userRoute = require('./routes/user.route');
 const app = express();
 
 // Middlewares
+app.use(cors());
 app.use(express.json());
 app.use(requestLogger);
 
