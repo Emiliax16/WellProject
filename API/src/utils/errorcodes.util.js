@@ -18,9 +18,15 @@ const unauthorized = {
   message: 'Recurso no autorizado.',
 }
 
+const missingToken = {
+  code: 401,
+  message: 'Token no encontrado.',
+}
+
 module.exports = {
   userNotFound,
   missingParams,
+  missingToken,
   passwordsDontMatch,
   unauthorized,
 }
