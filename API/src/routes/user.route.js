@@ -4,13 +4,15 @@ const { loginParams, registerParams } = require('../utils/params/user/user.param
 const { 
   getUsers,
   registerUser,
+  getUserInfo,
   loginUser,
 } = require('../controllers/user.controller');
 
 const router = express.Router();
 
-router.get('/users/register', getUsers);
-router.post('/users/register', validateParams(registerParams), registerUser);
+router.get('/users', getUsers);
+router.get('/users/data', authMiddleware('normal', 'admin'), getUserInfo);
+router.post('/users/register',  validateParams(registerParams), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
 
 module.exports = router;
