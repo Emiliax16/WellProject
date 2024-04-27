@@ -6,7 +6,11 @@ const Person = db.person;
 
 const getUsers = async (req, res, next) => {
   try {
-    const users = await User.findAll()
+    const users = await User.findAll({
+      attributes: {
+        exclude: ['encrypted_password']
+      }
+    })
     res.json(users)
   } catch (error) {
     next(error)
@@ -45,7 +49,8 @@ const registerUser = async (req, res, next) => {
 
     const user = await User.create(userParams)
     user.createPerson(personParams, Person)
-    
+
+    delete user.dataValues.encrypted_password
     const token = await user.generateToken()
     res.json({user, token})
   } catch (error) {
@@ -64,6 +69,8 @@ const loginUser = async (req, res, next) => {
     if (!isValid) {
       throw new ErrorHandler(passwordsDontMatch)
     }
+
+    delete user.dataValues.encrypted_password
     const token = await user.generateToken()
     res.status(201).json({ user, token })
   }
