@@ -23,10 +23,22 @@ const missingToken = {
   message: 'Token no encontrado.',
 }
 
+const userHasNoClientAssociated = {
+  code: 404,
+  message: 'El usuario no tiene un cliente asociado',
+}
+
+const wellNotFound = {
+  code: 404,
+  message: 'El pozo no existe',
+}
+
 module.exports = {
   userNotFound,
   missingParams,
   missingToken,
   passwordsDontMatch,
   unauthorized,
+  userHasNoClientAssociated,
+  wellNotFound,
 }
