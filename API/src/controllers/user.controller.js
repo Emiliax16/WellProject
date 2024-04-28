@@ -1,8 +1,10 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
-const { userNotFound, passwordsDontMatch } = require('../utils/errorcodes.util');
+const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
 const User = db.user;
 const Person = db.person;
+
+//           GET USER DATA
 
 const getUsers = async (req, res, next) => {
   try {
@@ -20,13 +22,36 @@ const getUsers = async (req, res, next) => {
 const getUserInfo = async (req, res, next) => {
   try {
     const { id } = req.user
-    const user = await User.findByPk(id, { exclude: ['encrypted_password']})
+    const user = await User.findByPk(id, { attributes: { exclude: ['encrypted_password'] }})
     res.json(user)
   } catch (error) {
     next(error)
   }
 }
 
+const getUserInfoById = async (req, res, next) => {
+  try {
+    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
+    const { id: userId } = req.params
+    const { id: requesterId, type: requesterRole} = req.user
+
+    if (userId !== requesterId && requesterRole !== 'admin') {
+      throw new ErrorHandler(unauthorized)
+    }
+    console.log(userId, requesterId, requesterRole)
+    const user = await User.findByPk(userId, {
+      attributes: { exclude: ['encrypted_password'] },  
+
+    });
+    res.json(user)
+  } catch (error) {
+    next(error)
+  }
+}
+
+//                USER WELLS
+
+//                USER AUTH
 
 const registerUser = async (req, res, next) => {
   try {
@@ -81,8 +106,9 @@ const loginUser = async (req, res, next) => {
 
 module.exports = {
   getUsers,
-  registerUser,
   getUserInfo,
+  getUserInfoById,
+  registerUser,
   loginUser,
 }
 

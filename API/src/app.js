@@ -6,6 +6,7 @@ const placeholderRoute = require('./routes/placeholder.route');
 const wellRoute = require('./routes/well.route');
 const wellDataRoute = require('./routes/wellData.route');
 const userRoute = require('./routes/user.route');
+const clientRoute = require('./routes/client.route');
 
 // App initialization
 const app = express();
@@ -17,6 +18,7 @@ app.use(requestLogger);
 
 // Rutas
 app.use(userRoute);
+app.use(clientRoute);
 app.use(placeholderRoute)
 app.use(wellRoute);
 app.use(wellDataRoute);
