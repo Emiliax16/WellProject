@@ -4,6 +4,27 @@ const { unauthorized, userHasNoClientAssociated, wellNotFound, userNotFound } = 
 const Client = db.client;
 const Well = db.well;
 const WellData = db.wellData;
+const User = db.user;
+
+
+const getAllClients = async (req, res, next) => {
+  try {
+    const clients = await Client.findAll({
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: {
+            exclude: ['encrypted_password']
+          }
+        },
+      ]
+    });
+    res.json(clients);
+  } catch (error) {
+    next(error);
+  }
+}
 
 const getClientWells = async (req, res, next) => {
   try {
@@ -84,6 +105,7 @@ const addDataToClientWell = async (req, res, next) => {
 }
 
 module.exports = {
+  getAllClients,
   getClientWells,
   createClientWell,
   addDataToClientWell,
