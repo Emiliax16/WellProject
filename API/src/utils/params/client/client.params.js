@@ -5,11 +5,7 @@ const createWell = {
   },
   isActived: {
     type: 'boolean',
-    required: true,
-  },
-  clientId: {
-    type: 'integer',
-    required: true,
+    required: false,
   },
   code: {
     type: 'string',
