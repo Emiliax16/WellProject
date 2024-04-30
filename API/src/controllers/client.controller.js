@@ -1,11 +1,19 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
-const { unauthorized, userHasNoClientAssociated, wellNotFound, userNotFound } = require('../utils/errorcodes.util');
+const { 
+  unauthorized, 
+  userHasNoClientAssociated, 
+  wellNotFound 
+} = require('../utils/errorcodes.util');
+const getPaginationParameters = require('../utils/query-params.util');
+
 const Client = db.client;
 const Well = db.well;
 const WellData = db.wellData;
 const User = db.user;
 
+
+//               GET ALL CLIENTS
 
 const getAllClients = async (req, res, next) => {
   try {
@@ -26,6 +34,8 @@ const getAllClients = async (req, res, next) => {
   }
 }
 
+//               GET WELLS OF A CLIENT
+
 const getClientWells = async (req, res, next) => {
   try {
     const { id: userId } = req.params;
@@ -34,33 +44,60 @@ const getClientWells = async (req, res, next) => {
     if (userId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
-    console.log('checking wells for', userId)
-    const client = await Client.findOne({
-      where: { userId },  // La condición where debe estar dentro del mismo objeto que include
-      include: [
-        {
-          model: Well,
-          as: 'wells',
-          include: [
-            {
-              model: WellData,
-              as: 'wellData',
-            },
-          ],
-        },
-      ],
-    });
+
+    const client = await Client.findOne({ where: { userId } });
     
     if (!client) {
-      throw new ErrorHandler(userNotFound);
+      throw new ErrorHandler(userHasNoClientAssociated);
     }
 
-    res.json(client);
+    const { limit, offset } = getPaginationParameters(req.query);
+    console.log(limit, offset)
+    const wells = await Well.findAndCountAll({
+      where: { clientId: client.id },
+      limit,
+      offset,
+    });
+
+    res.json(wells);
 
   } catch (error) {
     next(error);
   }
 }
+
+//               GET DATA OF A WELL
+
+const getWellData = async (req, res, next) => {
+  try {
+    const { id: userId, code: wellCode } = req.params;
+    const { id: requesterId, type: requesterRole } = req.user;
+    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
+    if (userId !== requesterId && requesterRole !== 'admin') {
+      throw new ErrorHandler(unauthorized);
+    }
+    const client = await Client.findOne({ where: { userId } });
+    if (!client) {
+      throw new ErrorHandler(userHasNoClientAssociated);
+    }
+    const well = await Well.findOne({ where: { code: wellCode, clientId: client.id } });
+    if (!well) {
+      throw new ErrorHandler(wellNotFound);
+    }
+    const { limit, offset } = getPaginationParameters(req.query);
+    const wellData = await WellData.findAndCountAll({
+      where: { code: well.code },
+      limit,
+      offset,
+    });
+    res.json(wellData);
+  
+  } catch (error) {
+    next(error);
+  }
+}
+
+//               CREATE A WELL FOR A CLIENT
 
 const createClientWell = async (req, res, next) => {
   try {
@@ -80,6 +117,8 @@ const createClientWell = async (req, res, next) => {
     next(error);
   }
 }
+
+//               ADD DATA TO A WELL OF A CLIENT
 
 const addDataToClientWell = async (req, res, next) => {
   try {
@@ -107,6 +146,7 @@ const addDataToClientWell = async (req, res, next) => {
 module.exports = {
   getAllClients,
   getClientWells,
+  getWellData,
   createClientWell,
   addDataToClientWell,
 }
