@@ -5,7 +5,7 @@ const userNotFound = {
 
 const passwordsDontMatch = {
   code: 400,
-  message: 'Las contraseñas no coinciden',
+  message: 'Contraseña incorrecta.',
 }
 
 const missingParams = {
@@ -28,9 +28,40 @@ const userHasNoClientAssociated = {
   message: 'El usuario no tiene un cliente asociado',
 }
 
+const clientNotFound = {
+  code: 404,
+  message: 'El cliente no existe',
+}
+
+
 const wellNotFound = {
   code: 404,
   message: 'El pozo no existe',
+}
+
+const passwordIsRequired = {
+  code: 400,
+  message: 'La contraseña es requerida para esta operacion',
+}
+
+const clientHasNoUserOrPersonAssociated = {
+  code: 404,
+  message: 'El cliente no tiene un usuario o persona asociada',
+}
+
+const trol = {
+  code: 400,
+  message: 'you are a trol',
+}
+
+const badPasswordValidation = {
+  code: 400,
+  message: 'La contraseña debe tener al menos 8 caracteres',
+}
+
+const newPasswordCantBeTheSame = {
+  code: 400,
+  message: 'La nueva contraseña no puede ser igual a la anterior',
 }
 
 module.exports = {
@@ -41,4 +72,10 @@ module.exports = {
   unauthorized,
   userHasNoClientAssociated,
   wellNotFound,
+  clientNotFound,
+  passwordIsRequired,
+  clientHasNoUserOrPersonAssociated,
+  trol,
+  badPasswordValidation,
+  newPasswordCantBeTheSame,
 }
