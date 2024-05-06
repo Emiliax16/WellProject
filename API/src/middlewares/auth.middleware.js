@@ -15,7 +15,7 @@ const authMiddleware = (...role) => {
       if (!decoded) {
         throw new ErrorHandler(unauthorized);
       }
-      console.log(decoded.type);
+
       if (role.length > 0 && !role.includes(decoded.type)) {
         throw new ErrorHandler(unauthorized);
       }

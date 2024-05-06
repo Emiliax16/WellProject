@@ -29,7 +29,10 @@ module.exports = (sequelize, DataTypes) => {
     code: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      unique: {
+        args: true,
+        msg: 'Este código ya está en uso.'
+      },
       primaryKey: true
     }
   }, {

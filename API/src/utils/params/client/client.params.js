@@ -1,3 +1,69 @@
+const editDataOfClient = {
+  //      PERSON DATA
+  id: {
+    type: 'integer',
+    forbidden: true,
+  },
+  createdAt:{
+    type: 'string',
+    forbidden: true,
+  },
+  updatedAt:{
+    type: 'string',
+    forbidden: true,
+  },
+  fullName: {
+    type: 'string',
+    required: false,
+  },
+  personalEmail: {
+    type: 'string',
+    required: false,
+  },
+  phoneNumber: {
+    type: 'string',
+    required: false,
+  },
+  location: {
+    type: 'string',
+    required: false,
+  },
+  userId: {
+    type: 'integer',
+    forbidden: true,
+  },
+  //      USER DATA
+  name: {
+    type: 'string',
+    required: false,
+  },
+  email: {
+    type: 'string',
+    required: false,
+  },
+  encrypted_password: {
+    type: 'string',
+    required: false,
+  },
+  roleId: {
+    type: 'integer',
+    required: false,
+  },
+  isActived: {
+    type: 'boolean',
+    required: false,
+  },
+  //     CLIENT PARAMS (to change their password)
+  newPassword: {
+    type: 'string',
+    required: false,
+  },
+  oldPassword: {
+    type: 'string',
+    required: false,
+  },
+}
+
 const createWell = {
   name: {
     type: 'string',
@@ -45,6 +111,7 @@ const addDataToWell = {
 }
 
 module.exports = {
+  editDataOfClient,
   createWell,
   addDataToWell,
 }

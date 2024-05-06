@@ -16,13 +16,14 @@ module.exports = (sequelize, DataTypes) => {
   wellData.init({
     code: {
       allowNull: false,
-      max: 20,
+      validate: {
+        len: [1, 20]
+      },
       type: DataTypes.STRING
     },
     date: {
       allowNull: false,
-        isDate: true,
-        type: DataTypes.STRING
+      type: DataTypes.STRING
     },
     hour: {
       allowNull: false,
@@ -34,7 +35,9 @@ module.exports = (sequelize, DataTypes) => {
     },
     caudal: {
       allowNull: false,
-      isDecimal: true,
+      validate: {
+        isFloat: true
+      },
       type: DataTypes.INTEGER
     },
     nivel_freatico: {
