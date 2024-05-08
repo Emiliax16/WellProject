@@ -2,6 +2,7 @@ const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
 const User = db.user;
+const Client = db.client;
 const Person = db.person;
 
 //           GET USER DATA
@@ -32,8 +33,11 @@ const getUserInfo = async (req, res, next) => {
 const getUserInfoById = async (req, res, next) => {
   try {
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    const { id: userId } = req.params
+    const { id: clientId } = req.params
     const { id: requesterId, type: requesterRole} = req.user
+
+    const client = await Client.findByPk(clientId);
+    const userId = client.userId;
 
     if (userId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized)
