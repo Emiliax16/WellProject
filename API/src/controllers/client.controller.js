@@ -5,10 +5,7 @@ const {
   userHasNoClientAssociated, 
   clientNotFound,
   wellNotFound,
-  passwordIsRequired,
-  passwordsDontMatch,
   clientHasNoUserOrPersonAssociated,
-  badPasswordValidation,
 } = require('../utils/errorcodes.util');
 const getPaginationParameters = require('../utils/query-params.util');
 
@@ -103,17 +100,17 @@ const deleteClient = async (req, res, next) => {
 //               GET WELLS OF A CLIENT
 const getClientWells = async (req, res, next) => {
   try {
-    const { id: userId } = req.params;
+    const { id: clientId } = req.params;
     const { id: requesterId, type: requesterRole } = req.user;
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (userId !== requesterId && requesterRole !== 'admin') {
+    if (clientId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
 
-    const client = await Client.findOne({ where: { userId } });
+    const client = await Client.findByPk(clientId);
     
     if (!client) {
-      throw new ErrorHandler(userHasNoClientAssociated);
+      throw new ErrorHandler(clientNotFound);
     }
 
     const { limit, offset } = getPaginationParameters(req.query);
@@ -135,15 +132,15 @@ const getClientWells = async (req, res, next) => {
 
 const getWellData = async (req, res, next) => {
   try {
-    const { id: userId, code: wellCode } = req.params;
+    const { id: clientId, code: wellCode } = req.params;
     const { id: requesterId, type: requesterRole } = req.user;
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (userId !== requesterId && requesterRole !== 'admin') {
+    if (clientId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
-    const client = await Client.findOne({ where: { userId } });
+    const client = await Client.findByPk(clientId);
     if (!client) {
-      throw new ErrorHandler(userHasNoClientAssociated);
+      throw new ErrorHandler(clientNotFound);
     }
     const well = await Well.findOne({ where: { code: wellCode, clientId: client.id } });
     if (!well) {
@@ -166,15 +163,15 @@ const getWellData = async (req, res, next) => {
 
 const createClientWell = async (req, res, next) => {
   try {
-    const { id: userId } = req.params;
+    const { id: clientId } = req.params;
     const { id: requesterId, type: requesterRole } = req.user;
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (userId !== requesterId && requesterRole !== 'admin') {
+    if (clientId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
-    const client = await Client.findOne({ where: { userId } });
+    const client = await Client.findByPk(clientId);
     if (!client) {
-      throw new ErrorHandler(userHasNoClientAssociated);
+      throw new ErrorHandler(clientNotFound);
     }
     const well = await Well.create({ ...req.body, clientId: client.id });
     res.json(well);
@@ -187,15 +184,15 @@ const createClientWell = async (req, res, next) => {
 
 const addDataToClientWell = async (req, res, next) => {
   try {
-    const { id: userId, code: wellCode } = req.params;
+    const { id: clientId, code: wellCode } = req.params;
     const { id: requesterId, type: requesterRole } = req.user;
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (userId !== requesterId && requesterRole !== 'admin') {
+    if (clientId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
-    const client = await Client.findOne({ where: { userId } });
+    const client = await Client.findByPk(clientId);
     if (!client) {
-      throw new ErrorHandler(userHasNoClientAssociated);
+      throw new ErrorHandler(clientNotFound);
     }
     const well = await Well.findOne({ where: { code: wellCode, clientId: client.id } });
     if (!well) {
