@@ -27,6 +27,15 @@ const getAllClients = async (req, res, next) => {
           attributes: {
             exclude: ['encrypted_password']
           },
+          include: [
+            {
+              model: Person,
+              as: 'person',
+              attributes: {
+                exclude: ['userId']
+              }
+            }
+          ]
         }
       ]
     });
