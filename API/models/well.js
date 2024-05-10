@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // Well tendrá dos asociaciones, una con Client (belongsTo) y otra con WellData (hasMany)
       // Para la demo, se usará información dummy
-      well.hasMany(models.wellData, { foreignKey: 'code', sourceKey: 'code' });
+      well.hasMany(models.wellData, { foreignKey: 'code', sourceKey: 'code', onDelete: 'CASCADE'});
       well.belongsTo(models.client, { foreignKey: 'clientId' });
     }
   }
