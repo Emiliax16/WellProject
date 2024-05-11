@@ -5,12 +5,11 @@ const ErrorHandler = require('../utils/error.util');
 const authMiddleware = (...role) => {
   return async (req, res, next) => {
     try {
-      
-      if (!req.headers.authorization) {
+      if (!req.headers.authorization && (req.body.headers && !req.body.headers.Authorization)) {
         throw new ErrorHandler(missingToken);
       }
-
-      const token = req.headers.authorization.split(' ')[1];
+      const base = req.headers.authorization ? req.headers.authorization : req.body.headers.Authorization;
+      const token = base.split(' ')[1];
       const decoded = decodeToken(token);
       if (!decoded) {
         throw new ErrorHandler(unauthorized);
