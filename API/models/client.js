@@ -9,7 +9,7 @@ const {
 module.exports = (sequelize, DataTypes) => {
   class client extends Model {
     static associate(models) {
-      client.belongsTo(models.user, { foreignKey: 'userId' });
+      client.belongsTo(models.user, { foreignKey: 'userId', onDelete: 'CASCADE' });
       client.hasMany(models.well, { foreignKey: 'clientId',  onDelete: 'CASCADE'});
     }
   }
