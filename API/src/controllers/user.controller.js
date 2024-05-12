@@ -45,6 +45,13 @@ const getUserInfoById = async (req, res, next) => {
     console.log(userId, requesterId, requesterRole)
     const user = await User.findByPk(userId, {
       attributes: { exclude: ['encrypted_password'] },  
+      include: {
+        model: Person,
+        as: 'person',
+        attributes: {
+          exclude: ['userId']
+        }
+      }
 
     });
     res.json(user)
