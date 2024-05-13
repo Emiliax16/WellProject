@@ -6,7 +6,7 @@ const WellData = db.wellData;
 const createWellData = async (req, res) => {
   try {
     console.log(req.body);
-    const well = await Well.findByPk(req.body.code); // Buscamos el pozo por su código
+    const well = await Well.findOne({ where: { code: req.body.code } }); // Buscamos el pozo por su código
     if (!well) {
       return res.status(404).send({
         message: 'Code no pertenece a ningún pozo registrado'
