@@ -12,7 +12,12 @@ module.exports = {
       code: {
         allowNull: false,
         max: 20,
-        type: Sequelize.STRING
+        type: Sequelize.STRING,
+        references : {
+          model: 'wells',
+          key: 'code'
+        },
+        onDelete: 'CASCADE'
       },
       date: {
         allowNull: false,
