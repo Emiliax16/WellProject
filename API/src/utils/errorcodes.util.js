@@ -43,7 +43,7 @@ const wellNotFound = {
 
 const wellHasDataAssociated = {
   code: 400,
-  message: 'No se puede eliminar un pozo con reportes asociados',
+  message: 'No se puede eliminar o editar un pozo con reportes asociados',
 }
 
 const passwordIsRequired = {

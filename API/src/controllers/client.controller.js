@@ -138,6 +138,43 @@ const getClientWells = async (req, res, next) => {
   }
 }
 
+// EDIT A WELL OF A CLIENT
+
+const editClientWell = async (req, res, next) => {
+  try {
+    const { id: clientId, code } = req.params;
+    const { id: requesterId, type: requesterRole } = req.user;
+
+    const client = await Client.findByPk(clientId);
+    if (!client) {
+      throw new ErrorHandler(userHasNoClientAssociated);
+    }
+
+    if (requesterRole === 'admin'){
+      //TODO check some kind of password or passphrase confirmation 
+      const well = await Well.findOne({ where: { code: code, clientId: client.id } });
+      if (!well) {
+        throw new ErrorHandler(wellNotFound);
+      }
+
+      if (req.body.code) {
+        const reportsAssociated = await WellData.findAndCountAll({
+          where: { code: well.code }
+        });
+  
+        if (reportsAssociated.count > 0) {
+          throw new ErrorHandler(wellHasDataAssociated);
+        }
+      }
+
+      await well.update(req.body);
+      return res.json({message: "Pozo editado exitosamente."});
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
 // DELETE A WELL OF A CLIENT
 
 const deleteClientWell = async (req, res, next) => {
@@ -163,7 +200,7 @@ const deleteClientWell = async (req, res, next) => {
       if (reportsAssociated.count > 0) {
         throw new ErrorHandler(wellHasDataAssociated);
       }
-      
+
       await well.destroy();
       return res.json({message: `Pozo ${code} eliminado exitosamente.`});
     }
@@ -259,6 +296,7 @@ module.exports = {
   editClient,
   deleteClient,
   deleteClientWell,
+  editClientWell,
   getClientWells,
   getWellData,
   createClientWell,

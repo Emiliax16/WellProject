@@ -83,6 +83,37 @@ const createWell = {
   },
 }
 
+const editDataOfWell = {
+  id: {
+    type: 'integer',
+    forbidden: true,
+  },
+  createdAt:{
+    type: 'string',
+    forbidden: true,
+  },
+  updatedAt:{
+    type: 'string',
+    forbidden: true,
+  },
+  name: {
+    type: 'string',
+    required: false,
+  },
+  isActived: {
+    type: 'boolean',
+    required: false,
+  },
+  code: {
+    type: 'string',
+    required: false,
+  }, 
+  location: {
+    type: 'string',
+    required: false,
+  },
+}
+
 const addDataToWell = {
   code: {
     type: 'string',
@@ -114,4 +145,5 @@ module.exports = {
   editDataOfClient,
   createWell,
   addDataToWell,
+  editDataOfWell,
 }
