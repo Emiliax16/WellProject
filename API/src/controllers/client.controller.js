@@ -6,6 +6,7 @@ const {
   clientNotFound,
   wellNotFound,
   clientHasNoUserOrPersonAssociated,
+  wellHasDataAssociated,
 } = require('../utils/errorcodes.util');
 const getPaginationParameters = require('../utils/query-params.util');
 
@@ -137,6 +138,45 @@ const getClientWells = async (req, res, next) => {
   }
 }
 
+// DELETE A WELL OF A CLIENT
+
+const deleteClientWell = async (req, res, next) => {
+  try {
+    const { id: clientId, code } = req.params;
+    const { id: requesterId, type: requesterRole } = req.user;
+    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
+    const client = await Client.findByPk(clientId);
+    if (!client) {
+      throw new ErrorHandler(userHasNoClientAssociated);
+    }
+    if (requesterRole === 'admin'){
+      //TODO check some kind of password or passphrase confirmation 
+      const well = await Well.findOne({ where: { code: code, clientId: client.id } });
+      if (!well) {
+        throw new ErrorHandler(wellNotFound);
+      }
+
+      const reportsAssociated = await WellData.findAndCountAll({
+        where: { code: well.code }
+      });
+
+      if (reportsAssociated.count > 0) {
+        throw new ErrorHandler(wellHasDataAssociated);
+      }
+      
+      await well.destroy();
+      return res.json({message: `Pozo ${code} eliminado exitosamente.`});
+    }
+
+    if (requesterRole === 'normal') {
+      // el único que puede eliminar pozos es el admin
+      throw new ErrorHandler(unauthorized);
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
 //               GET DATA OF A WELL
 
 const getWellData = async (req, res, next) => {
@@ -218,6 +258,7 @@ module.exports = {
   getAllClients,
   editClient,
   deleteClient,
+  deleteClientWell,
   getClientWells,
   getWellData,
   createClientWell,

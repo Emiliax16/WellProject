@@ -1,3 +1,5 @@
+const well = require("../../models/well")
+
 const userNotFound = {
   code: 404,
   message: 'El usuario no existe',
@@ -39,6 +41,11 @@ const wellNotFound = {
   message: 'El pozo no existe',
 }
 
+const wellHasDataAssociated = {
+  code: 400,
+  message: 'No se puede eliminar un pozo con reportes asociados',
+}
+
 const passwordIsRequired = {
   code: 400,
   message: 'La contraseña es requerida para esta operacion',
@@ -78,4 +85,5 @@ module.exports = {
   trol,
   badPasswordValidation,
   newPasswordCantBeTheSame,
+  wellHasDataAssociated
 }

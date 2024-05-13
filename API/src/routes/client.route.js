@@ -8,6 +8,7 @@ const {
   getClientWells,
   editClient,
   deleteClient,
+  deleteClientWell,
   getWellData,
   createClientWell,
   addDataToClientWell,
@@ -22,5 +23,6 @@ router.put('/clients/:id/edit', authMiddleware('normal', 'admin'), checkTroll(),
 router.post('/clients/:id/wells/create', authMiddleware('normal', 'admin'), validateParams(createWell), createClientWell);
 router.post('/clients/:id/wells/:code/add', authMiddleware('normal', 'admin'), validateParams(addDataToWell), addDataToClientWell);
 router.delete('/clients/:id/delete', authMiddleware('normal', 'admin'), deleteClient);
+router.delete('/clients/:id/wells/:code/delete', authMiddleware('normal', 'admin'), deleteClientWell);
 
 module.exports = router;
