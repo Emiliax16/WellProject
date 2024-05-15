@@ -10,7 +10,7 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      wellData.belongsTo(models.well, { foreignKey: 'code', targetKey: 'code' });
+      wellData.belongsTo(models.well, { foreignKey: 'code', targetKey: 'code', onDelete: 'CASCADE'});
     }
   }
   wellData.init({
