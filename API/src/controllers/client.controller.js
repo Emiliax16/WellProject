@@ -157,7 +157,7 @@ const editClientWell = async (req, res, next) => {
         throw new ErrorHandler(wellNotFound);
       }
 
-      if (req.body.code) {
+      if (req.body.code && req.body.code !== well.code) {
         const reportsAssociated = await WellData.findAndCountAll({
           where: { code: well.code }
         });
