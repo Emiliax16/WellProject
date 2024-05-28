@@ -76,23 +76,27 @@ module.exports = (sequelize, DataTypes) => {
     return await generateToken(this);
   }
 
-  user.prototype.handlePasswordChange = async function (oldPassword, newPassword) {
-    if (!newPassword || !oldPassword) {
+  user.prototype.handlePasswordChange = async function (oldPassword, newPassword ) {
+    if (!newPassword) {
       throw new ErrorHandler(passwordIsRequired);
     }
 
-    const doesPasswordMatch = await this.checkPassword(oldPassword);
-    if (!doesPasswordMatch) {
-      throw new ErrorHandler(passwordsDontMatch);
+    if (oldPassword) {
+      // Actualmente no se mandará la contraseña actual para actualizarla con una nueva,
+      // pero se deja la lógica por si se decide implementar en un futuro
+      const doesPasswordMatch = await this.checkPassword(oldPassword);
+      if (!doesPasswordMatch) {
+        throw new ErrorHandler(passwordsDontMatch);
+      }
+
+      if (oldPassword === newPassword) {
+        throw new ErrorHandler(newPasswordCantBeTheSame);
+      }
     }
 
     const isPasswordValid = await this.checkPasswordValidation(newPassword);
     if (!isPasswordValid) {
       throw new ErrorHandler(badPasswordValidation);
-    }
-
-    if (oldPassword === newPassword) {
-      throw new ErrorHandler(newPasswordCantBeTheSame);
     }
 
     await this.updatePassword(newPassword);

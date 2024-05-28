@@ -64,19 +64,22 @@ const editClient = async (req, res, next) => {
     }
 
     if (requesterRole === 'admin'){
-      //TODO check some kind of password or passphrase confirmation 
+      //TODO check some kind of password or passphrase confirmation
+      const password = req.body.encrypted_password;
+
+      // Quitamos el password del body para actualizar los datos del cliente por separado
+      if (password) {
+        delete req.body.encrypted_password;
+        await user.handlePasswordChange(undefined, password);
+      }
+
       await client.updateDetails(user, person, req.body);
       return res.json({ message: `Cliente ${client.id} editado exitosamente.` });
     }
     
-    if (requesterRole === 'normal' & client.userId !== requesterId) {
+    if (requesterRole === 'normal') {
       throw new ErrorHandler(unauthorized);
     }
-
-    const { newPassword, oldPassword } = req.body;
-    await user.handlePasswordChange(oldPassword, newPassword)
-
-    return res.json({ message: `Contraseña del cliente ${client.id} fue editada exitosamente.` });
   } catch (error) {
     next(error);
   }
