@@ -25,6 +25,6 @@ router.post('/clients/:id/wells/create', authMiddleware('normal', 'admin'), vali
 router.post('/clients/:id/wells/:code/add', authMiddleware('normal', 'admin'), validateParams(addDataToWell), addDataToClientWell);
 router.delete('/clients/:id/delete', authMiddleware('normal', 'admin'), deleteClient);
 router.delete('/clients/:id/wells/:code/delete', authMiddleware('normal', 'admin'), deleteClientWell);
-router.put('/clients/:id/wells/:code/edit', authMiddleware('normal', 'admin'), validateParams(editDataOfWell), editClientWell);
+router.put('/clients/:id/wells/:code/edit', authMiddleware('admin'), validateParams(editDataOfWell), editClientWell);
 
 module.exports = router;
