@@ -23,7 +23,13 @@ const getUsers = async (req, res, next) => {
 const getUserInfo = async (req, res, next) => {
   try {
     const { id } = req.user
-    const user = await User.findByPk(id, { attributes: { exclude: ['encrypted_password'] }})
+    const user = await User.findByPk(id, {
+      attributes: { exclude: ['encrypted_password'] },
+      include: {
+      model: Client,
+      as: 'client'
+      }
+    });
     res.json(user)
   } catch (error) {
     next(error)
