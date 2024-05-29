@@ -35,14 +35,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     caudal: {
       allowNull: false,
-      validate: {
-        isFloat: true
-      },
-      type: DataTypes.INTEGER
+      type: DataTypes.FLOAT
     },
     nivel_freatico: {
       allowNull: false,
-      type: DataTypes.INTEGER
+      type: DataTypes.FLOAT
     },
   }, {
     sequelize,
