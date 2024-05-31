@@ -115,12 +115,12 @@ const getClientWells = async (req, res, next) => {
   try {
     const { id: clientId } = req.params;
     const { id: requesterId, type: requesterRole } = req.user;
-    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (clientId !== requesterId && requesterRole !== 'admin') {
+
+    const client = await Client.findByPk(clientId);
+    if (client.userId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
 
-    const client = await Client.findByPk(clientId);
     
     if (!client) {
       throw new ErrorHandler(clientNotFound);
@@ -183,7 +183,7 @@ const editClientWell = async (req, res, next) => {
 const deleteClientWell = async (req, res, next) => {
   try {
     const { id: clientId, code } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
+    const { type: requesterRole } = req.user;
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
     const client = await Client.findByPk(clientId);
     if (!client) {
@@ -223,11 +223,12 @@ const getWellData = async (req, res, next) => {
   try {
     const { id: clientId, code: wellCode } = req.params;
     const { id: requesterId, type: requesterRole } = req.user;
-    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (clientId !== requesterId && requesterRole !== 'admin') {
+
+    const client = await Client.findByPk(clientId);
+    if (client.userId !== requesterId && requesterRole !== 'admin') {
       throw new ErrorHandler(unauthorized);
     }
-    const client = await Client.findByPk(clientId);
+
     if (!client) {
       throw new ErrorHandler(clientNotFound);
     }
@@ -253,11 +254,8 @@ const getWellData = async (req, res, next) => {
 const createClientWell = async (req, res, next) => {
   try {
     const { id: clientId } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
+
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (clientId !== requesterId && requesterRole !== 'admin') {
-      throw new ErrorHandler(unauthorized);
-    }
     const client = await Client.findByPk(clientId);
     if (!client) {
       throw new ErrorHandler(clientNotFound);
@@ -274,11 +272,7 @@ const createClientWell = async (req, res, next) => {
 const addDataToClientWell = async (req, res, next) => {
   try {
     const { id: clientId, code: wellCode } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
-    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    if (clientId !== requesterId && requesterRole !== 'admin') {
-      throw new ErrorHandler(unauthorized);
-    }
+
     const client = await Client.findByPk(clientId);
     if (!client) {
       throw new ErrorHandler(clientNotFound);
