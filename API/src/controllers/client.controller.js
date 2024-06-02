@@ -241,6 +241,7 @@ const getWellData = async (req, res, next) => {
       where: { code: well.code },
       limit,
       offset,
+      order: [['createdAt', 'DESC']],
     });
     res.json(wellData);
   
