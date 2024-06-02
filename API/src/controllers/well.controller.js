@@ -46,8 +46,29 @@ const getWellDataByWell = async (req, res) => {
   }
 }
 
+const activeOrDesactiveWell = async (req, res) => {
+  try {
+    const well = await Well.findOne({ where: { id: req.params.id } });
+    if (!well) {
+      res.status(404).send({
+        message: 'Well not found'
+      });
+    }
+
+
+    well.isActived = !well.isActived;
+    await well.save();
+    res.json(well);
+  } catch (error) {
+    res.status(500).send({
+      message: error.message || 'Some error occurred while activating the Well'
+    });
+  }
+}
+
 module.exports = {
     getAllWells,
     createWell,
-    getWellDataByWell
+    getWellDataByWell,
+    activeOrDesactiveWell,
 }
