@@ -112,6 +112,10 @@ const loginUser = async (req, res, next) => {
       throw new ErrorHandler(passwordsDontMatch)
     }
 
+    if (user.roleId === 2 && !user.isActived) {
+      throw new ErrorHandler(unauthorized)
+    }
+
     delete user.dataValues.encrypted_password
     const token = await user.generateToken()
     res.status(201).json({ user, token })
