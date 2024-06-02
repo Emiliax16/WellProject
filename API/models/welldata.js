@@ -44,6 +44,12 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'wellData',
+    indexes: [
+      {
+        unique: true,
+        fields: ['date', 'hour']
+      }
+    ]
   });
   return wellData;
 };
