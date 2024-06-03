@@ -42,6 +42,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.FLOAT
     },
   }, {
+
+    hooks: {
+      afterCreate: async (wellData) => {
+        //todo
+      }
+    },
     sequelize,
     modelName: 'wellData',
     indexes: [
