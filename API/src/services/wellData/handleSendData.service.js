@@ -4,67 +4,71 @@ const xml2js = require('xml2js');
 const axios = require('axios');
 dotenv.config();
 
+const URL_ENDPOINT = "https://snia.mop.gob.cl/controlextraccion/datosExtraccion/SendDataExtraccionService";
+const SOAP_ACTION = "http://www.mop.cl/controlextraccion/wsdl/datosExtraccion/authSendDataExtraccionOp";
+
 const fixNumberFormat = (number) => {
     if (typeof number !== 'number') {
         return number;
-      }
-      const fixedNumber = number.toFixed(2);
-      return fixedNumber;
+    }
+    const fixedNumber = number.toFixed(2);
+    return fixedNumber;
 }
 
 const formatRequest = async (data) => {
     try {
         const builder = new xml2js.Builder({ headless: true, rootName: 'soapenv:Envelope', renderOpts: { pretty: false } });
         const xml = builder.buildObject({
-          $: {
-            'xmlns:soapenv': 'http://schemas.xmlsoap.org/soap/envelope/',
-            'xmlns:aut1': 'http://www.mop.cl/controlextraccion/xsd/datosExtraccion/AuthSendDataExtraccionRequest',
-          },
-          'soapenv:Header': {
-            'aut1:authSendDataExtraccionTraza': {
-              'aut1:codigoDeLaObra': data.code,
-              'aut1:timeStampOrigen': data.timeStampOrigen,
+            $: {
+                'xmlns:soapenv': 'http://schemas.xmlsoap.org/soap/envelope/',
+                'xmlns:aut1': 'http://www.mop.cl/controlextraccion/xsd/datosExtraccion/AuthSendDataExtraccionRequest',
             },
-          },
-          'soapenv:Body': {
-            'aut1:authSendDataExtraccionRequest': {
-              'aut1:authDataUsuario': {
-                'aut1:idUsuario': {
-                  'aut1:rut': data.rut,
+            'soapenv:Header': {
+                'aut1:authSendDataExtraccionTraza': {
+                    'aut1:codigoDeLaObra': data.code,
+                    'aut1:timeStampOrigen': data.timeStampOrigen,
                 },
-                'aut1:password': data.password,
-              },
-              'aut1:authDataExtraccionSubterranea': {
-                'aut1:fechaMedicion': data.date,
-                'aut1:horaMedicion': data.hour,
-                'aut1:totalizador': data.totalizador,
-                'aut1:caudal': fixNumberFormat(data.caudal),
-                'aut1:nivelFreaticoDelPozo': fixNumberFormat(data.nivel_freatico),
-              },
             },
-          },
+            'soapenv:Body': {
+                'aut1:authSendDataExtraccionRequest': {
+                    'aut1:authDataUsuario': {
+                        'aut1:idUsuario': {
+                            'aut1:rut': data.rut,
+                        },
+                        'aut1:password': data.password,
+                    },
+                    'aut1:authDataExtraccionSubterranea': {
+                        'aut1:fechaMedicion': data.date,
+                        'aut1:horaMedicion': data.hour,
+                        'aut1:totalizador': data.totalizador,
+                        'aut1:caudal': fixNumberFormat(data.caudal),
+                        'aut1:nivelFreaticoDelPozo': fixNumberFormat(data.nivel_freatico),
+                    },
+                },
+            },
         });
         return xml;
     } catch (error) {
-        console.log(error);
+        console.log('Error construyendo el XML:', error);
     }
 }
 
-
-
 const postToDga = async (data) => {
-    const realEndpoint = 'https://snia.mop.gob.cl/controlextraccion/wsdl/datosExtraccion/SendDataExtraccionService'
     try {
-        const response = await axios.post(realEndpoint, data, {
+        const response = await axios.post(URL_ENDPOINT, data, {
             headers: {
                 'Content-Type': 'text/xml',
-                'soapAction': 'http://www.mop.cl/controlextraccion/wsdl/datosExtraccion/authSendDataExtraccionOp',
+                'SOAPAction': SOAP_ACTION,
             },
         });
-        const parsedResponse = await xml2js.parseStringPromise(response)
+        // !!!!!!!!!! IMPORTANTE diosssss el fokin parseString era muy importante, no sacar sino todo se cae
+        const parsedResponse = await xml2js.parseStringPromise(response.data);
         return parsedResponse;
     } catch (error) {
-        console.log(error);
+        console.log('Error enviando la solicitud o procesando la respuesta:', error);
+        if (error.response) {
+            console.log('Datos de respuesta:', error.response.data);
+        }
     }
 }
 
@@ -77,12 +81,12 @@ const handleData = async (wellData) => {
     }
 
     try {
-
         const formattedData = await formatRequest(data);
+        //console.log('XMLLLLLLL:', formattedData);
         const response = await postToDga(formattedData);
-        console.log(response);
+        console.log('---- DGA RESPUSTA ----\n', JSON.stringify(response, null, 2));
     } catch (error) {
-        console.log(error);
+        console.log('Error en handleData:', error);
     }
 }
 
@@ -94,4 +98,4 @@ const exampleData = {
     caudal: 1,
     nivel_freatico: 5.8
 }
-handleData(exampleData)
+handleData(exampleData);
