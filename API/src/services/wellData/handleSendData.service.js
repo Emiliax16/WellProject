@@ -2,6 +2,8 @@ const dotenv = require('dotenv');
 const moment = require('moment-timezone');
 const xml2js = require('xml2js');
 const axios = require('axios');
+const ErrorHandler = require('../../utils/error.util');
+const { wellDataHasInvalidData } = require('../../utils/errorcodes.util');
 dotenv.config();
 
 const URL_ENDPOINT = "https://snia.mop.gob.cl/controlextraccion/datosExtraccion/SendDataExtraccionService";
@@ -72,6 +74,25 @@ const postToDga = async (data) => {
   }
 }
 
+const checkValidResponse = (response) => {
+  let breakIteration = false;
+  response['soapenv:Envelope']['soapenv:Body']?.forEach((body) => {
+    body["authSendDataExtraccionResponse"]?.forEach((body2) => {
+      body2["status"]?.forEach((state) => {
+        state["Code"]?.forEach((code) => {
+          if (code !== "0") {
+            console.log('Tenemos un code no válido');
+            breakIteration = true;
+            return false;
+          }
+        })
+      })
+    })
+  })
+  if (breakIteration) return false;
+  return true;
+}
+
 const handleData = async (wellData) => {
   const data = {
     ...wellData,
@@ -85,9 +106,8 @@ const handleData = async (wellData) => {
     const response = await postToDga(formattedData);
     console.log('---- DGA RESPUSTA ----\n', JSON.stringify(response, null, 2));
 
-    checkResponse(response);
+    if (!checkValidResponse(response)) throw new ErrorHandler(wellDataHasInvalidData);
   } catch (error) {
-    console.log('Error en handleData:', error);
     throw error;
   }
 }

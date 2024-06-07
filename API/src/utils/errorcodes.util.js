@@ -71,6 +71,11 @@ const newPasswordCantBeTheSame = {
   message: 'La nueva contraseña no puede ser igual a la anterior',
 }
 
+const wellDataHasInvalidData = {
+  code: 400,
+  message: 'Los datos del pozo son inválidos',
+}
+
 module.exports = {
   userNotFound,
   missingParams,
@@ -85,5 +90,6 @@ module.exports = {
   trol,
   badPasswordValidation,
   newPasswordCantBeTheSame,
-  wellHasDataAssociated
+  wellHasDataAssociated,
+  wellDataHasInvalidData
 }
