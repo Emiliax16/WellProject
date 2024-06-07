@@ -41,6 +41,15 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.FLOAT
     },
+    sent: {
+      allowNull: false,
+      defaultValue: false,
+      type: DataTypes.BOOLEAN
+    },
+    sentDate: {
+      allowNull: true,
+      type: DataTypes.STRING
+    }
   }, {
 
     hooks: {
