@@ -2,6 +2,8 @@
 const {
   Model
 } = require('sequelize');
+const handleData = require('../src/services/wellData/handleSendData.service');
+const moment = require('moment-timezone');
 module.exports = (sequelize, DataTypes) => {
   class wellData extends Model {
     /**
@@ -54,7 +56,12 @@ module.exports = (sequelize, DataTypes) => {
 
     hooks: {
       afterCreate: async (wellData) => {
-        //todo
+        try {
+          await handleData(wellData);
+          wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
+        } catch (error) {
+          console.log(error);
+        }
       }
     },
     sequelize,
