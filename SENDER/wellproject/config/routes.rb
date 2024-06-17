@@ -1,18 +1,11 @@
 Rails.application.routes.draw do
-  resources :senders
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
+  resources :senders, only: [] do
+    collection do
+      get 'fetch_unsent_and_send', to: 'senders#fetch_unsent_and_send'
+    end
+  end
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
-  get "up" => "rails/health#show", as: :rails_health_check
-
-  # Defines the root path route ("/")
-  # root "posts#index"
-
-  # RUTAS SENDER
-  resources :senders, only: %i[send] do
-    collection do
-      post '/dga', to: 'senders#send_dga'
-    end
-  end
+  get 'up' => 'rails/health#show', as: :rails_health_check
 end
