@@ -1,7 +1,11 @@
-const db = require('../../models')
+const db = require('../../models');
 
 const Well = db.well;
 const WellData = db.wellData;
+
+const handleData = require('../services/wellData/handleSendData.service');
+const moment = require('moment-timezone');
+
 
 const createWellData = async (req, res) => {
   try {
@@ -37,6 +41,35 @@ const createWellData = async (req, res) => {
   }
 }
 
+const repostToDGA = async (req, res, next) => {
+  const { id: wellDataId } = req.body;
+  try {
+    const wellData = await WellData.findByPk(wellDataId);
+    console.log("Llegó el reporte a enviar: ", wellData.id);
+    //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
+    //await handleData(wellData);
+    //wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
+    res.json({ message: "Reporte enviado correctamente." }).status(200);
+  } catch (error) {
+    next(error);
+  }
+}
+
+const fetchUnsentReports = async (req, res, next) => {
+  try {
+    const unsentReports = await WellData.findAll({ where: { sent: false } });
+    let formattedReports = {'reports': {}};
+    unsentReports.forEach(report => {
+      formattedReports["reports"][report.id] = report
+    });
+    res.json( formattedReports ).status(200);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
-  createWellData
+  createWellData,
+  fetchUnsentReports,
+  repostToDGA
 }

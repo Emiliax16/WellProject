@@ -4,6 +4,7 @@ const xml2js = require('xml2js');
 const axios = require('axios');
 const ErrorHandler = require('../../utils/error.util');
 const { wellDataHasInvalidData } = require('../../utils/errorcodes.util');
+const { UPDATE } = require('sequelize/lib/query-types');
 dotenv.config();
 
 const URL_ENDPOINT = "https://snia.mop.gob.cl/controlextraccion/datosExtraccion/SendDataExtraccionService";

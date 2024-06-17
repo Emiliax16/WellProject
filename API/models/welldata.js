@@ -57,8 +57,9 @@ module.exports = (sequelize, DataTypes) => {
     hooks: {
       afterCreate: async (wellData) => {
         try {
-          await handleData(wellData);
-          wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
+          //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
+          //await handleData(wellData);
+          //wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
         } catch (error) {
           console.log(error);
         }
