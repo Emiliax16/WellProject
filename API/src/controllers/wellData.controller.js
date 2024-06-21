@@ -57,7 +57,20 @@ const repostToDGA = async (req, res, next) => {
 
 const fetchUnsentReports = async (req, res, next) => {
   try {
-    const unsentReports = await WellData.findAll({ where: { sent: false } });
+    // Se obtienen todos los reportes no mandados de pozos activos
+    console.log("Buscando reportes no enviados")
+    const unsentReports = await WellData.findAll({
+      where: {
+        sent: false
+      },
+      include: [{
+        model: Well,
+        where: {
+          isActived: true
+        }
+      }]
+    });
+    console.log("Reportes encontrados: ", unsentReports.length)
     let formattedReports = {'reports': {}};
     unsentReports.forEach(report => {
       formattedReports["reports"][report.id] = report
