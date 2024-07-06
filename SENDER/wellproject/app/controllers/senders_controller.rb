@@ -7,7 +7,7 @@ class SendersController < ApplicationController
   def fetch_unsent_and_send
     begin
       puts "ejecutando el cron job a #{Time.now}"
-      reports = fetch_reports
+      reports = check_reports_to_send(fetch_reports)
       if reports.any?
         send_reports(reports)
         render json: { message: "Reportes enviados correctamente." }, status: :ok
@@ -24,7 +24,7 @@ class SendersController < ApplicationController
     def fetch_reports
       uri = URI.parse("http://#{ENV['FETCH_API_REPORTS']}")
       response = Net::HTTP.get_response(uri)
-      if response.is_a?(Net::HTTPSuccess)
+      if response.is_a?(Net::HTTPSuccess) && response.body['reports'].present?
         json_response = JSON.parse(response.body)
         json_response['reports'].values
       else
@@ -33,8 +33,7 @@ class SendersController < ApplicationController
     end
 
     def send_reports(reports)
-      valid_reports = check_reports_to_send(reports)
-      send_data = SendDga.new(valid_reports)
+      send_data = SendDga.new(reports)
       send_data.send_data
     end
 

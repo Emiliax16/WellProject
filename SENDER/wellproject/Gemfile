@@ -6,6 +6,9 @@ ruby "3.0.2"
 gem "pry"
 gem 'pry-byebug'
 
+# webmock gem for mocking http requests
+gem 'webmock'
+
 # Cron job
 gem 'whenever', require: false
 
