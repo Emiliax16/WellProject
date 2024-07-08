@@ -3,8 +3,7 @@ const db = require('../../models');
 const Well = db.well;
 const WellData = db.wellData;
 
-const handleData = require('../services/wellData/handleSendData.service');
-const moment = require('moment-timezone');
+const processAndPostData = require('../services/wellData/handleSendData.service');
 
 
 const createWellData = async (req, res) => {
@@ -47,8 +46,7 @@ const repostToDGA = async (req, res, next) => {
     const wellData = await WellData.findByPk(wellDataId);
     console.log("Llegó el reporte a enviar: ", wellData.id);
     //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
-    //await handleData(wellData);
-    //wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
+    //await processAndPostData(wellData);
     res.json({ message: "Reporte enviado correctamente." }).status(200);
   } catch (error) {
     next(error);
@@ -70,6 +68,14 @@ const fetchUnsentReports = async (req, res, next) => {
         }
       }]
     });
+
+    // Si no hay reportes no enviados, se envía un 404
+    if (unsentReports.length === 0){
+      return res.status(404).send({
+        message: 'No hay reportes no enviados'
+      });
+    }
+
     console.log("Reportes encontrados: ", unsentReports.length)
     let formattedReports = {'reports': {}};
     unsentReports.forEach(report => {
