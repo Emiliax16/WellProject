@@ -4,6 +4,7 @@ const xml2js = require('xml2js');
 const axios = require('axios');
 const ErrorHandler = require('../../utils/error.util');
 const { wellDataHasInvalidData } = require('../../utils/errorcodes.util');
+
 dotenv.config();
 
 const URL_ENDPOINT = "https://snia.mop.gob.cl/controlextraccion/datosExtraccion/SendDataExtraccionService";
@@ -76,6 +77,11 @@ const postToDga = async (data) => {
 
 const checkValidResponse = (response) => {
   let breakIteration = false;
+
+  if (!response['soapenv:Envelope'] || !response['soapenv:Envelope']['soapenv:Body']) {
+    return false;
+  }
+
   response['soapenv:Envelope']['soapenv:Body']?.forEach((body) => {
     body["authSendDataExtraccionResponse"]?.forEach((body2) => {
       body2["status"]?.forEach((state) => {
@@ -93,7 +99,7 @@ const checkValidResponse = (response) => {
   return true;
 }
 
-const handleData = async (wellData) => {
+const processAndPostData = async (wellData) => {
   const data = {
     ...wellData,
     rut: process.env.DGA_RUT,
@@ -107,6 +113,8 @@ const handleData = async (wellData) => {
     console.log('---- DGA RESPUSTA ----\n', JSON.stringify(response, null, 2));
 
     if (!checkValidResponse(response)) throw new ErrorHandler(wellDataHasInvalidData);
+
+    await wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
   } catch (error) {
     throw error;
   }
@@ -121,6 +129,6 @@ const exampleData = {
   caudal: 1,
   nivel_freatico: 5.8
 }
-handleData(exampleData); */
+processAndPostData(exampleData); */
 
-module.exports = handleData;
+module.exports = processAndPostData;

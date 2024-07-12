@@ -1,7 +1,10 @@
-const db = require('../../models')
+const db = require('../../models');
 
 const Well = db.well;
 const WellData = db.wellData;
+
+const processAndPostData = require('../services/wellData/handleSendData.service');
+
 
 const createWellData = async (req, res) => {
   try {
@@ -37,6 +40,55 @@ const createWellData = async (req, res) => {
   }
 }
 
+const repostToDGA = async (req, res, next) => {
+  const { id: wellDataId } = req.body;
+  try {
+    const wellData = await WellData.findByPk(wellDataId);
+    console.log("Llegó el reporte a enviar: ", wellData.id);
+    //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
+    //await processAndPostData(wellData);
+    res.json({ message: "Reporte enviado correctamente." }).status(200);
+  } catch (error) {
+    next(error);
+  }
+}
+
+const fetchUnsentReports = async (req, res, next) => {
+  try {
+    // Se obtienen todos los reportes no mandados de pozos activos
+    console.log("Buscando reportes no enviados")
+    const unsentReports = await WellData.findAll({
+      where: {
+        sent: false
+      },
+      include: [{
+        model: Well,
+        where: {
+          isActived: true
+        }
+      }]
+    });
+
+    // Si no hay reportes no enviados, se envía un 404
+    if (unsentReports.length === 0){
+      return res.status(404).send({
+        message: 'No hay reportes no enviados'
+      });
+    }
+
+    console.log("Reportes encontrados: ", unsentReports.length)
+    let formattedReports = {'reports': {}};
+    unsentReports.forEach(report => {
+      formattedReports["reports"][report.id] = report
+    });
+    res.json( formattedReports ).status(200);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
-  createWellData
+  createWellData,
+  fetchUnsentReports,
+  repostToDGA
 }

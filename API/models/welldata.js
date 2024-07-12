@@ -2,8 +2,7 @@
 const {
   Model
 } = require('sequelize');
-const handleData = require('../src/services/wellData/handleSendData.service');
-const moment = require('moment-timezone');
+const processAndPostData = require('../src/services/wellData/handleSendData.service');
 module.exports = (sequelize, DataTypes) => {
   class wellData extends Model {
     /**
@@ -57,8 +56,13 @@ module.exports = (sequelize, DataTypes) => {
     hooks: {
       afterCreate: async (wellData) => {
         try {
-          await handleData(wellData);
-          wellData.update({ sent: true, sentDate: new moment().tz('America/Santiago').format() })
+          // Sólo se pueden enviar reportes de pozos activos
+          const well = await wellData.getWell();
+
+          if (well.isActived) {
+            //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
+            await processAndPostData(wellData);
+          }
         } catch (error) {
           console.log(error);
         }
