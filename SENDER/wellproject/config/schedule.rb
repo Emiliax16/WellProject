@@ -24,9 +24,15 @@ every :day, at: '6:00 am' do
   runner "SendersController.new.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
 end
 
-# CRON JOB para ejecutarse cada 10 minutos, es para tests, se puede bajar a 1 minutos y ver el
+every '0 9 28 * *' do
+  runner "ReportSenderController.new.fetch_reports_and_sent_to_clients", output: { standard: 'log/cron.log' }
+end
+
+
+# CRON JOB para ejecutarse cada 1 minuto, es para tests, ver el
 # archivo log/cron.log para ver que se ejecuta correctamente
 #every 1.minute do
 #  runner "SendersController.new.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
+#   runner "ReportSenderController.new.fetch_reports_and_sent_to_clients", output: { standard: 'log/cron.log' }
 #end
 
