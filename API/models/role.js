@@ -17,7 +17,14 @@ module.exports = (sequelize, DataTypes) => {
     type: {
       allowNull: false,
       defaultValue: 'normal',
-      type: DataTypes.STRING
+      type: DataTypes.STRING,
+      unique: {
+        args: true,
+        msg: 'Role already exists'
+      },
+      validate: {
+        isIn: [['admin', 'normal', 'company']],
+      }
     },
     description: {
       allowNull: false,
@@ -28,6 +35,11 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false,
       type: DataTypes.BOOLEAN
     },
+    isCompany: {
+      allowNull: false,
+      defaultValue: false,
+      type: DataTypes.BOOLEAN
+    }
   }, {
     sequelize,
     modelName: 'role',
