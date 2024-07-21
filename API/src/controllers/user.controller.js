@@ -1,6 +1,7 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
+const checkPermissions = require('../utils/check-permissions');
 const User = db.user;
 const Client = db.client;
 const Person = db.person;
@@ -45,9 +46,10 @@ const getUserInfoById = async (req, res, next) => {
     const client = await Client.findByPk(clientId);
     const userId = client.userId;
 
-    if (userId !== requesterId && requesterRole !== 'admin') {
+    if (!checkPermissions(req.user, client)) {
       throw new ErrorHandler(unauthorized)
     }
+
     console.log(userId, requesterId, requesterRole)
     const user = await User.findByPk(userId, {
       attributes: { exclude: ['encrypted_password'] },  
@@ -58,7 +60,6 @@ const getUserInfoById = async (req, res, next) => {
           exclude: ['userId']
         }
       }
-
     });
     res.json(user)
   } catch (error) {
@@ -73,12 +74,19 @@ const getUserInfoById = async (req, res, next) => {
 const registerUser = async (req, res, next) => {
   try {
     // Separar atributos del body que son de User y Person
+    const { id: requesterId, type: requesterRole} = req.user
+
+    if (requesterRole !== 'admin' && req.body.roleId !== 2) {
+      throw new ErrorHandler(unauthorized)
+    }
+
     userParams = {
       name: req.body.name,
       email: req.body.email,
       encrypted_password: req.body.encrypted_password,
       roleId: req.body.roleId,
-      isActived: req.body.isActived
+      isActived: req.body.isActived,
+      createdBy: requesterId
     }
 
     personParams = {
@@ -89,6 +97,7 @@ const registerUser = async (req, res, next) => {
       userId: null
     }
 
+    // check if client or company | company might not need person
     const user = await User.create(userParams)
     user.createPerson(personParams, Person)
 
