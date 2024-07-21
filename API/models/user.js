@@ -56,6 +56,10 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: true,
       type: DataTypes.BOOLEAN
     },
+    createdBy: {
+      allowNull: false,
+      type: DataTypes.INTEGER
+    },
   }, 
   {
     hooks: {
@@ -63,9 +67,21 @@ module.exports = (sequelize, DataTypes) => {
         user.encrypted_password = await hashPassword(user.encrypted_password);
       },
       afterCreate: async (user) => {
-        if (user.roleId === 1) return;
-        const client = sequelize.models.client;
-        await client.create({ userId: user.id })
+        const role = sequelize.models.role;
+        const userRole = await role.findByPk(user.roleId);
+
+        if (userRole.type === 'admin') return;
+
+        if (userRole.type === 'client') {
+          const client = sequelize.models.client;
+          await client.create({ userId: user.id })
+          return;
+        }
+        if (userRole.type === 'company') {
+          const company = sequelize.models.company;
+          await company.create({ userId: user.id });
+          return;
+        }
       },
     },
     sequelize,
