@@ -56,6 +56,10 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: true,
       type: DataTypes.BOOLEAN
     },
+    createdBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    }
   }, 
   {
     hooks: {
@@ -63,7 +67,7 @@ module.exports = (sequelize, DataTypes) => {
         user.encrypted_password = await hashPassword(user.encrypted_password);
       },
       afterCreate: async (user) => {
-        if (user.roleId === 1) return;
+        if (user.roleId === 1 || user.roleId === 3) return;
         const client = sequelize.models.client;
         await client.create({ userId: user.id })
       },
