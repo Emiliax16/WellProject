@@ -8,6 +8,7 @@ const wellDataRoute = require('./routes/wellData.route');
 const userRoute = require('./routes/user.route');
 const clientRoute = require('./routes/client.route');
 const contactRoute = require('./routes/contact.route');
+const companyRoute = require('./routes/company.route');
 
 // App initialization
 const app = express();
@@ -23,6 +24,7 @@ app.use(clientRoute);
 app.use(placeholderRoute)
 app.use(wellRoute);
 app.use(wellDataRoute);
+app.use(companyRoute);
 
 // Ruta formulario de contacto
 app.use(contactRoute);
