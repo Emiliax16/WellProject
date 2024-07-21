@@ -9,13 +9,18 @@ const {
   registerUser,
   loginUser,
 } = require('../controllers/user.controller');
-
+const {
+  AllRoles,
+  AdminAndCompany,
+  Admin
+} = require('../utils/allowed-roles.util');
+console.log(...AdminAndCompany);
 const router = express.Router();
 
 router.get('/users', getUsers);
-router.get('/users/data', authMiddleware('normal', 'admin'), getUserInfo);
-router.get('/users/data/:id', authMiddleware('normal', 'admin'), getUserInfoById);
-router.post('/users/register',  validateParams(registerParams), registerUser);
+router.get('/users/data', authMiddleware(...AllRoles), getUserInfo);
+router.get('/users/data/:id', authMiddleware(...AllRoles), getUserInfoById);
+router.post('/users/register',  authMiddleware(...AdminAndCompany), validateParams(registerParams), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
 
 module.exports = router;
