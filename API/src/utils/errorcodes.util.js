@@ -76,6 +76,16 @@ const wellDataHasInvalidData = {
   message: 'Los datos del pozo son inválidos',
 }
 
+const companyNotFound = {
+  code: 404,
+  message: 'La empresa no existe',
+}
+
+const clientDoesntBelongToCompany = {
+  code: 400,
+  message: 'El cliente no pertenece a esta compañia',
+}
+
 module.exports = {
   userNotFound,
   missingParams,
@@ -91,5 +101,7 @@ module.exports = {
   badPasswordValidation,
   newPasswordCantBeTheSame,
   wellHasDataAssociated,
-  wellDataHasInvalidData
+  wellDataHasInvalidData,
+  companyNotFound,
+  clientDoesntBelongToCompany
 }

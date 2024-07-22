@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       client.belongsTo(models.user, { foreignKey: 'userId', onDelete: 'CASCADE' });
       client.hasMany(models.well, { foreignKey: 'clientId',  onDelete: 'CASCADE'});
+      client.belongsTo(models.company, { foreignKey: 'companyId', onDelete: 'CASCADE' });
     }
   }
   client.init({
@@ -20,6 +21,10 @@ module.exports = (sequelize, DataTypes) => {
         args: true,
         msg: "El usuario ya tiene un cliente asociado."
       },
+      type: DataTypes.INTEGER
+    },
+    companyId: {
+      allowNull: true,
       type: DataTypes.INTEGER
     },
   }, {

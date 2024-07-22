@@ -1,4 +1,5 @@
 const db = require('../../models');
+const client = require('../../models/client');
 const ErrorHandler = require('../utils/error.util');
 const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
 const User = db.user;
@@ -73,12 +74,22 @@ const getUserInfoById = async (req, res, next) => {
 const registerUser = async (req, res, next) => {
   try {
     // Separar atributos del body que son de User y Person
+    // aca deberia ir el createdBy, que no implica asociacion, simplemente quien lo creo
+    // esto deberia ser una transaccion
+    const { id: requesterId, type: requesterRole} = req.user
+    console.log(req.user)
+
+    if (requesterRole !== 'admin' && req.body.roleId !== 2) {
+      throw new ErrorHandler(unauthorized)
+    }
+
     userParams = {
       name: req.body.name,
       email: req.body.email,
       encrypted_password: req.body.encrypted_password,
       roleId: req.body.roleId,
-      isActived: req.body.isActived
+      isActived: req.body.isActived,
+      createdBy: requesterId
     }
 
     personParams = {
@@ -91,6 +102,10 @@ const registerUser = async (req, res, next) => {
 
     const user = await User.create(userParams)
     user.createPerson(personParams, Person)
+
+    if (requesterRole === 'company'){
+      client.companyId = requesterId
+    }
 
     delete user.dataValues.encrypted_password
     const token = await user.generateToken()
