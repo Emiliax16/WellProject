@@ -16,16 +16,7 @@ const getAllCompanies = async (req, res, next) => {
                 as: 'user',
                 attributes: {
                   exclude: ['encrypted_password']
-                },
-                include: [
-                  {
-                    model: Person,
-                    as: 'person',
-                    attributes: {
-                      exclude: ['userId']
-                    }
-                  }
-                ]
+                }
               }
             ]
           });
@@ -47,16 +38,7 @@ const getCompanyInfo = async (req, res, next) => {
                         as: 'user',
                         attributes: {
                             exclude: ['encrypted_password']
-                        },
-                        include: [
-                            {
-                                model: Person,
-                                as: 'person',
-                                attributes: {
-                                    exclude: ['userId']
-                                }
-                            }
-                        ]
+                        }
                     }
                 ]
             }

@@ -1,10 +1,13 @@
 //well.controller.js
-
+const checkPermissionsForClientResources = require('../utils/check-permissions');
+const ErrorHandler = require('../utils/error.util');
+const { unauthorized } = require('../utils/errorcodes.util');
 const db = require('../../models')
 
 const Well = db.well;
 const WellData = db.wellData;
 
+//  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
 const getAllWells = async (req, res) => {
   try {
     const wells = await Well.findAll();
@@ -53,6 +56,10 @@ const activeOrDesactiveWell = async (req, res) => {
       res.status(404).send({
         message: 'Well not found'
       });
+    }
+
+    if (!checkPermissionsForClientResources(req.user, undefined, true)) {
+      ErrorHandler(unauthorized);
     }
 
 

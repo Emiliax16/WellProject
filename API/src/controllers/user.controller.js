@@ -2,6 +2,7 @@ const db = require('../../models');
 const client = require('../../models/client');
 const ErrorHandler = require('../utils/error.util');
 const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
+const checkPermissionsForClientResources = require('../utils/check-permissions');
 const User = db.user;
 const Client = db.client;
 const Person = db.person;
@@ -41,15 +42,14 @@ const getUserInfoById = async (req, res, next) => {
   try {
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
     const { id: clientId } = req.params
-    const { id: requesterId, type: requesterRole} = req.user
 
     const client = await Client.findByPk(clientId);
     const userId = client.userId;
 
-    if (userId !== requesterId && requesterRole !== 'admin') {
+    if (!checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized)
     }
-    console.log(userId, requesterId, requesterRole)
+
     const user = await User.findByPk(userId, {
       attributes: { exclude: ['encrypted_password'] },  
       include: {
@@ -59,7 +59,6 @@ const getUserInfoById = async (req, res, next) => {
           exclude: ['userId']
         }
       }
-
     });
     res.json(user)
   } catch (error) {
@@ -77,11 +76,11 @@ const registerUser = async (req, res, next) => {
     // aca deberia ir el createdBy, que no implica asociacion, simplemente quien lo creo
     // esto deberia ser una transaccion
     const { id: requesterId, type: requesterRole} = req.user
-    console.log(req.user)
 
-    if (requesterRole !== 'admin' && req.body.roleId !== 2) {
+    if (!checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized)
     }
+
 
     userParams = {
       name: req.body.name,
@@ -100,6 +99,7 @@ const registerUser = async (req, res, next) => {
       userId: null
     }
 
+    // check if client or company | company might not need person
     const user = await User.create(userParams)
     user.createPerson(personParams, Person)
 

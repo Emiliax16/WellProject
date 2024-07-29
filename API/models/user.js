@@ -57,9 +57,9 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN
     },
     createdBy: {
-      allowNull: false,
-      type: DataTypes.INTEGER
-    },
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    }
   }, 
   {
     hooks: {
@@ -70,16 +70,11 @@ module.exports = (sequelize, DataTypes) => {
         const role = sequelize.models.role;
         const userRole = await role.findByPk(user.roleId);
 
-        if (userRole.type === 'admin') return;
+        if (userRole.type === 'admin' || userRole.type === 'company') return;
 
-        if (userRole.type === 'client') {
+        if (userRole.type === 'normal') {
           const client = sequelize.models.client;
           await client.create({ userId: user.id })
-          return;
-        }
-        if (userRole.type === 'company') {
-          const company = sequelize.models.company;
-          await company.create({ userId: user.id });
           return;
         }
       },
