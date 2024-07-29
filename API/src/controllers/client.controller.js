@@ -1,5 +1,6 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
+const checkPermissionsForClientResources = require('../utils/check-permissions');
 const { 
   unauthorized, 
   userHasNoClientAssociated, 
@@ -50,7 +51,6 @@ const getAllClients = async (req, res, next) => {
 const editClient = async (req, res, next) => {
   try {
     const { id: clientId } = req.params; 
-    const { id: requesterId, type: requesterRole } = req.user;
 
     const client = await Client.findByPk(clientId);
     if (!client) {
@@ -63,23 +63,20 @@ const editClient = async (req, res, next) => {
       throw new ErrorHandler(clientHasNoUserOrPersonAssociated);
     }
 
-    if (requesterRole === 'admin'){
-      //TODO check some kind of password or passphrase confirmation
-      const password = req.body.encrypted_password;
-
-      // Quitamos el password del body para actualizar los datos del cliente por separado
-      if (password) {
-        delete req.body.encrypted_password;
-        await user.handlePasswordChange(undefined, password);
-      }
-
-      await client.updateDetails(user, person, req.body);
-      return res.json({ message: `Cliente ${client.id} editado exitosamente.` });
-    }
-    
-    if (requesterRole === 'normal') {
+    if (!checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
+
+    const password = req.body.encrypted_password;
+
+    // Quitamos el password del body para actualizar los datos del cliente por separado
+    if (password) {
+      delete req.body.encrypted_password;
+      await user.handlePasswordChange(undefined, password);
+    }
+
+    await client.updateDetails(user, person, req.body);
+    return res.json({ message: `Cliente ${client.id} editado exitosamente.` });
   } catch (error) {
     next(error);
   }
@@ -90,21 +87,18 @@ const editClient = async (req, res, next) => {
 const deleteClient = async (req, res, next) => {
   try {
     const { id: clientId } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
-    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
     const client = await Client.findByPk(clientId);
     if (!client) {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
     const user = await client.getUser();
-    if (requesterRole === 'admin'){
-      //TODO check some kind of password or passphrase confirmation 
-      await user.destroy();
-      return res.json({message: `Cliente ${client.id} eliminado exitosamente.`});
-    }
-    if (requesterRole === 'normal' & client.userId !== requesterId) {
+
+    if (!checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
+
+    await user.destroy();
+    return res.json({message: `Cliente ${client.id} eliminado exitosamente.`});
   } catch (error) {
     next(error);
   }
@@ -114,16 +108,14 @@ const deleteClient = async (req, res, next) => {
 const getClientWells = async (req, res, next) => {
   try {
     const { id: clientId } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
 
     const client = await Client.findByPk(clientId);
-    if (client.userId !== requesterId && requesterRole !== 'admin') {
-      throw new ErrorHandler(unauthorized);
-    }
-
-    
     if (!client) {
       throw new ErrorHandler(clientNotFound);
+    }
+
+    if (!checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
     }
 
     const { limit, offset } = getPaginationParameters(req.query);
@@ -146,33 +138,33 @@ const getClientWells = async (req, res, next) => {
 const editClientWell = async (req, res, next) => {
   try {
     const { id: clientId, code } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
 
     const client = await Client.findByPk(clientId);
     if (!client) {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
 
-    if (requesterRole === 'admin'){
-      //TODO check some kind of password or passphrase confirmation 
-      const well = await Well.findOne({ where: { code: code, clientId: client.id } });
-      if (!well) {
-        throw new ErrorHandler(wellNotFound);
-      }
-
-      if (req.body.code && req.body.code !== well.code) {
-        const reportsAssociated = await WellData.findAndCountAll({
-          where: { code: well.code }
-        });
-  
-        if (reportsAssociated.count > 0) {
-          throw new ErrorHandler(wellHasDataAssociated);
-        }
-      }
-
-      await well.update(req.body);
-      return res.json({message: "Pozo editado exitosamente."});
+    if (!checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
     }
+
+    const well = await Well.findOne({ where: { code: code, clientId: client.id } });
+    if (!well) {
+      throw new ErrorHandler(wellNotFound);
+    }
+
+    if (req.body.code && req.body.code !== well.code) {
+      const reportsAssociated = await WellData.findAndCountAll({
+        where: { code: well.code }
+      });
+
+      if (reportsAssociated.count > 0) {
+        throw new ErrorHandler(wellHasDataAssociated);
+      }
+    }
+
+    await well.update(req.body);
+    return res.json({message: "Pozo editado exitosamente."});
   } catch (error) {
     next(error);
   }
@@ -183,35 +175,30 @@ const editClientWell = async (req, res, next) => {
 const deleteClientWell = async (req, res, next) => {
   try {
     const { id: clientId, code } = req.params;
-    const { type: requesterRole } = req.user;
-    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
     const client = await Client.findByPk(clientId);
     if (!client) {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
-    if (requesterRole === 'admin'){
-      //TODO check some kind of password or passphrase confirmation 
-      const well = await Well.findOne({ where: { code: code, clientId: client.id } });
-      if (!well) {
-        throw new ErrorHandler(wellNotFound);
-      }
 
-      const reportsAssociated = await WellData.findAndCountAll({
-        where: { code: well.code }
-      });
-
-      if (reportsAssociated.count > 0) {
-        throw new ErrorHandler(wellHasDataAssociated);
-      }
-
-      await well.destroy();
-      return res.json({message: `Pozo ${code} eliminado exitosamente.`});
-    }
-
-    if (requesterRole === 'normal') {
-      // el único que puede eliminar pozos es el admin
+    if (!checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
+
+    const well = await Well.findOne({ where: { code: code, clientId: client.id } });
+    if (!well) {
+      throw new ErrorHandler(wellNotFound);
+    }
+
+    const reportsAssociated = await WellData.findAndCountAll({
+      where: { code: well.code }
+    });
+
+    if (reportsAssociated.count > 0) {
+      throw new ErrorHandler(wellHasDataAssociated);
+    }
+
+    await well.destroy();
+    return res.json({message: `Pozo ${code} eliminado exitosamente.`});
   } catch (error) {
     next(error);
   }
@@ -222,15 +209,14 @@ const deleteClientWell = async (req, res, next) => {
 const getWellData = async (req, res, next) => {
   try {
     const { id: clientId, code: wellCode } = req.params;
-    const { id: requesterId, type: requesterRole } = req.user;
 
     const client = await Client.findByPk(clientId);
-    if (client.userId !== requesterId && requesterRole !== 'admin') {
-      throw new ErrorHandler(unauthorized);
-    }
-
     if (!client) {
       throw new ErrorHandler(clientNotFound);
+    }
+
+    if (!checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
     }
     const well = await Well.findOne({ where: { code: wellCode, clientId: client.id } });
     if (!well) {
@@ -255,12 +241,15 @@ const getWellData = async (req, res, next) => {
 const createClientWell = async (req, res, next) => {
   try {
     const { id: clientId } = req.params;
-
-    // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
     const client = await Client.findByPk(clientId);
     if (!client) {
       throw new ErrorHandler(clientNotFound);
     }
+
+    if (!checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
+    }
+
     const well = await Well.create({ ...req.body, clientId: client.id });
     res.json(well);
   } catch (error) {
