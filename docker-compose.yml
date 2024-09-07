@@ -21,6 +21,22 @@ services:
     depends_on:
       - db
     <<: *container-defaults
+
+  rails:
+    build:
+      context: ./SENDER/wellproject
+    container_name: rails
+    env_file:
+      - .env
+    volumes:  
+      - ./SENDER/wellproject:/rails
+    ports:  
+      - 3001:3000
+    depends_on: []
+    environment:
+      RAILS_ENV: development
+    <<: *container-defaults
+
   db:
     image: postgres:14.11-alpine3.19  # Usa la imagen más reciente de PostgreSQL
     environment:
@@ -30,7 +46,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data  # Persiste los datos entre reinicios del contenedor
     ports:
-      - "5432:5432"  # Mapea el puerto 5432 del contenedor al mismo puerto en el host
+      - "5433:5432"  # Mapea el puerto 5432 del contenedor al mismo puerto en el host
     <<: *container-defaults
 volumes:
   postgres_data:   # Define el volumen para almacenar datos

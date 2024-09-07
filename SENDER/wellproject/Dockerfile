@@ -40,7 +40,12 @@ FROM base
 # Install packages needed for deployment
 RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y curl libsqlite3-0 libvips && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives && \
+    apt-get update && \
+    apt-get install cron -y && \
+    service cron start  
+    # bundle exec wheneverize . && \
+    # whenever --update-crontab && \
 
 # Copy built artifacts: gems, application
 COPY --from=build /usr/local/bundle /usr/local/bundle
@@ -49,6 +54,7 @@ COPY --from=build /rails /rails
 # Run and own only the runtime files as a non-root user for security
 RUN useradd rails --create-home --shell /bin/bash && \
     chown -R rails:rails db log storage tmp
+RUN chmod +x /rails/bin/docker-entrypoint
 USER rails:rails
 
 # Entrypoint prepares the database.
@@ -56,4 +62,4 @@ ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
-CMD ["./bin/rails", "server"]
+CMD ["./bin/rails", "server", "-b", "0.0.0.0"]
