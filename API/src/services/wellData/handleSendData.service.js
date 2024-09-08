@@ -29,7 +29,7 @@ const formatRequest = async (data) => {
         'soapenv:Header': {
             'aut1:authSendDataExtraccionTraza': {
                 'aut1:codigoDeLaObra': data.code,
-                'aut1:timeStampOrigen': data.timeStampOrigen,
+                'aut1:timeStampOrigen': moment().utc().format("YYYY-MM-DDTHH:mm:ss[Z]"),
             },
         },
         'soapenv:Body': {
@@ -50,6 +50,7 @@ const formatRequest = async (data) => {
             },
         },
     });
+    console.log("---- XML ----\n", xml);
     return xml;
   } catch (error) {
     console.log('Error construyendo el XML:', error);
@@ -78,7 +79,7 @@ const postToDga = async (data) => {
 const checkValidResponse = (response) => {
   let breakIteration = false;
 
-  if (!response['soapenv:Envelope'] || !response['soapenv:Envelope']['soapenv:Body']) {
+  if (!response || !response['soapenv:Envelope'] || !response['soapenv:Envelope']['soapenv:Body']) {
     return false;
   }
 
@@ -120,15 +121,15 @@ const processAndPostData = async (wellData) => {
   }
 }
 
-/* Data DUMMY -- no borrar todavía
+/* Data DUMMY -- no borrar todavía */
 const exampleData = {
-  code: "TEST12345",
-  date: "12-09-2027", 
-  hour: "12:31:00",
-  totalizador: 5,
-  caudal: 1,
-  nivel_freatico: 5.8
+  code: "OB-0902-639",
+  date: "31-08-2024",
+  hour: "22:00:00",
+  totalizador: 341,
+  caudal: 0,
+  nivel_freatico: 35.7
 }
-processAndPostData(exampleData); */
+processAndPostData(exampleData); //*/
 
 module.exports = processAndPostData;

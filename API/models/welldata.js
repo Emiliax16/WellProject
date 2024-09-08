@@ -60,7 +60,6 @@ module.exports = (sequelize, DataTypes) => {
           const well = await wellData.getWell();
 
           if (well.isActived) {
-            //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
             await processAndPostData(wellData);
           }
         } catch (error) {

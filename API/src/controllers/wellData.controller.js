@@ -44,9 +44,7 @@ const repostToDGA = async (req, res, next) => {
   const { id: wellDataId } = req.body;
   try {
     const wellData = await WellData.findByPk(wellDataId);
-    console.log("Llegó el reporte a enviar: ", wellData.id);
-    //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
-    //await processAndPostData(wellData);
+    await processAndPostData(wellData);
     res.json({ message: "Reporte enviado correctamente." }).status(200);
   } catch (error) {
     next(error);
