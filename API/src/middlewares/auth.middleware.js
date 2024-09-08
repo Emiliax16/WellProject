@@ -15,7 +15,9 @@ const authMiddleware = (...role) => {
         throw new ErrorHandler(unauthorized);
       }
 
-      if (role.length > 0 && !role.includes(decoded.type)) {
+      let userRoles = Array.isArray(role) ? role.flat() : [role];
+
+      if (role.length > 0 && !userRoles.includes(decoded.type)) {
         throw new ErrorHandler(unauthorized);
       }
       req.user = decoded;

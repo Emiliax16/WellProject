@@ -3,9 +3,13 @@ const client = require('../../models/client');
 const ErrorHandler = require('../utils/error.util');
 const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
+const company = require('../../models/company');
+const { sequelize } = db;
 const User = db.user;
 const Client = db.client;
 const Person = db.person;
+const Company = db.company;
+const Role = db.role;
 
 //           GET USER DATA
 
@@ -60,7 +64,23 @@ const getUserInfoById = async (req, res, next) => {
         }
       }
     });
-    res.json(user)
+
+    if (!user) {
+      throw new ErrorHandler(userNotFound);
+    }
+
+    const role = await Role.findByPk(user.roleId);
+
+    if (!role) {
+      throw new ErrorHandler(roleNotFound);
+    }
+
+    const userWithRole = {
+      ...user.toJSON(),
+      role: role.type
+    };
+
+    res.json(userWithRole);
   } catch (error) {
     next(error)
   }
@@ -71,49 +91,69 @@ const getUserInfoById = async (req, res, next) => {
 //                USER AUTH
 
 const registerUser = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+
   try {
-    // Separar atributos del body que son de User y Person
-    // aca deberia ir el createdBy, que no implica asociacion, simplemente quien lo creo
-    // esto deberia ser una transaccion
-    const { id: requesterId, type: requesterRole} = req.user
+    const { id: requesterId, type: requesterRole } = req.user;
 
     if (!checkPermissionsForClientResources(req.user, undefined, true)) {
-      throw new ErrorHandler(unauthorized)
+      throw new ErrorHandler(unauthorized);
     }
 
-
-    userParams = {
+    const userParams = {
       name: req.body.name,
       email: req.body.email,
       encrypted_password: req.body.encrypted_password,
       roleId: req.body.roleId,
       isActived: req.body.isActived,
-      createdBy: requesterId
+      createdBy: requesterId,
+    };
+
+    const role = await Role.findByPk(userParams.roleId, { transaction });
+
+    if (!role) {
+      throw new ErrorHandler(userNotFound);
     }
 
-    personParams = {
-      fullName: req.body.fullName,
-      location: req.body.location,
-      phoneNumber: req.body.phoneNumber,
-      personalEmail: req.body.personalEmail,
-      userId: null
+    const user = await User.create(userParams, { transaction, individualHooks: true });
+
+    if (role.type === 'normal') {
+      await Client.create({ userId: user.id }, { transaction });
     }
 
-    // check if client or company | company might not need person
-    const user = await User.create(userParams)
-    user.createPerson(personParams, Person)
+    let personalParams = {};
+    if (role.type === 'normal' || role.type === 'admin') {
+      personalParams = {
+        fullName: req.body.fullName,
+        location: req.body.location,
+        phoneNumber: req.body.phoneNumber,
+        personalEmail: req.body.personalEmail,
+        userId: user.id
+      };
 
-    if (requesterRole === 'company'){
-      client.companyId = requesterId
+      await Person.create(personalParams, { transaction });
+    } else {
+      personalParams = {
+        companyLogo: req.body.companyLogo,
+        companyRut: req.body.companyRut,
+        phoneNumber: req.body.phoneNumber,
+        recoveryEmail: req.body.recoveryEmail,
+        location: req.body.location,
+        userId: user.id,
+      };
+      await Company.create(personalParams, { transaction });
     }
 
-    delete user.dataValues.encrypted_password
-    const token = await user.generateToken()
-    res.json({user, token})
+    await transaction.commit();
+
+    delete user.dataValues.encrypted_password;
+    const token = await user.generateToken();
+    res.json({ user, token });
   } catch (error) {
-    next(error)
+    await transaction.rollback();
+    next(error);
   }
-}
+};
 
 const loginUser = async (req, res, next) => {
   try {
@@ -126,8 +166,8 @@ const loginUser = async (req, res, next) => {
     if (!isValid) {
       throw new ErrorHandler(passwordsDontMatch)
     }
-
-    if (user.roleId === 2 && !user.isActived) {
+    const role = await user.getRole()
+    if (role.type === 'normal' && !user.isActived) {
       throw new ErrorHandler(unauthorized)
     }
 
@@ -140,11 +180,42 @@ const loginUser = async (req, res, next) => {
   }
 }
 
+const getUserRoleById = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const user = await User.findByPk(id)
+
+    if (!user) {
+      throw new ErrorHandler(userNotFound)
+    }
+
+    const role = await user.getRole()
+    if (!role) {
+      throw new ErrorHandler(userNotFound)
+    }
+
+    res.status(200).json(role)
+  } catch (error) {
+    throw new ErrorHandler(userNotFound)
+  }
+}
+
+const getAllUserRoles = async (req, res, next) => {
+  try {
+    const roles = await Role.findAll()
+    res.status(200).json(roles)
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   getUsers,
   getUserInfo,
   getUserInfoById,
   registerUser,
   loginUser,
+  getUserRoleById,
+  getAllUserRoles,
 }
 

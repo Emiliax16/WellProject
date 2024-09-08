@@ -8,6 +8,8 @@ const {
   getUserInfoById,
   registerUser,
   loginUser,
+  getUserRoleById,
+  getAllUserRoles,
 } = require('../controllers/user.controller');
 const {
   AllRoles,
@@ -22,5 +24,7 @@ router.get('/users/data', authMiddleware(...AllRoles), getUserInfo);
 router.get('/users/data/:id', authMiddleware(...AllRoles), getUserInfoById);
 router.post('/users/register',  authMiddleware(...AdminAndCompany), validateParams(registerParams), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
+router.get('/users/role/:id', authMiddleware(...AllRoles), getUserRoleById);
+router.get('/users/roles', authMiddleware(...Admin), getAllUserRoles);
 
 module.exports = router;
