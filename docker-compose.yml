@@ -25,11 +25,12 @@ services:
   rails:
     build:
       context: ./SENDER/wellproject
-    container_name: rails
+    container_name: rails_2
     env_file:
       - .env
     volumes:  
       - ./SENDER/wellproject:/rails
+      - bundle-data_2:/usr/local/bundle
     ports:  
       - 3001:3000
     depends_on: []
@@ -50,3 +51,4 @@ services:
     <<: *container-defaults
 volumes:
   postgres_data:   # Define el volumen para almacenar datos
+  bundle-data_2: # para almacenar las gemas de rails

@@ -2,15 +2,15 @@ source "https://rubygems.org"
 
 ruby "3.0.2"
 
-# best debugger in the world
-gem "pry"
-gem 'pry-byebug'
-
 # webmock gem for mocking http requests
 gem 'webmock'
 
 # Cron job
-gem 'whenever', require: false
+group :development, :test, :production do
+  gem 'whenever', require: false
+end
+
+gem 'reline', '~> 0.5.10'
 
 # ENV
 gem 'dotenv-rails'
