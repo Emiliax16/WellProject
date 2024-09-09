@@ -1,10 +1,29 @@
 const ErrorHandler = require('../utils/error.util');
 
-function validateParams(paramsSpec) {
+function validateParams(paramsSpec, registerUser = false) {
   return function(req, res, next) {
     const errors = [];
     const forbidden = [];
     const params = []
+
+    // Si la validación proviene del registro de usuarios, es necesario
+    // hacer una excepción, puesto que si el usuario es normal o admin, se
+    // necesitan parámetros de Person, pero si es empresa, se necesitan parámetros
+    // de Company
+    if (registerUser) {
+      if (req.body.roleType === 'admin' || req.body.roleType === 'normal') {
+        // excluir campos específicos de Company
+        delete paramsSpec.companyLogo;
+        delete paramsSpec.companyRut;
+        delete paramsSpec.recoveryEmail;
+      } else if (req.body.roleType === 'company') {
+        // excluir campos específicos de Person
+        delete paramsSpec.fullName;
+        delete paramsSpec.location;
+        delete paramsSpec.phoneNumber;
+        delete paramsSpec.personalEmail;
+      }
+    }
 
     for (const [key, value] of Object.entries(paramsSpec)) {
       const paramValue = req.body[key];

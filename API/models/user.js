@@ -22,6 +22,7 @@ module.exports = (sequelize, DataTypes) => {
       user.hasOne(models.person, { foreignKey: 'userId', onDelete: 'CASCADE' });
       user.belongsTo(models.role, { foreignKey: 'roleId' });
       user.hasOne(models.client, { foreignKey: 'userId', onDelete: 'CASCADE' });
+      user.hasOne(models.company, { foreignKey: 'userId', onDelete: 'CASCADE' });
     }
   }
   user.init({

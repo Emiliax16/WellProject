@@ -46,7 +46,18 @@ const registerParams = {
     type: 'boolean',
     required: true,
   },
-
+  companyLogo: {
+    type: 'string',
+    required: false,
+  },
+  companyRut: {
+    type: 'string',
+    required: true,
+  },
+  recoveryEmail: {
+    type: 'string',
+    required: false,
+  }
 }
 
 module.exports = {

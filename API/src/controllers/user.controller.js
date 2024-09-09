@@ -141,6 +141,7 @@ const registerUser = async (req, res, next) => {
         location: req.body.location,
         userId: user.id,
       };
+      
       await Company.create(personalParams, { transaction });
     }
 
