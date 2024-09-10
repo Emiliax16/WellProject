@@ -22,6 +22,7 @@ module.exports = (sequelize, DataTypes) => {
       user.hasOne(models.person, { foreignKey: 'userId', onDelete: 'CASCADE' });
       user.belongsTo(models.role, { foreignKey: 'roleId' });
       user.hasOne(models.client, { foreignKey: 'userId', onDelete: 'CASCADE' });
+      user.hasOne(models.company, { foreignKey: 'userId', onDelete: 'CASCADE' });
     }
   }
   user.init({
@@ -57,32 +58,15 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN
     },
     createdBy: {
-      allowNull: false,
-      type: DataTypes.INTEGER
-    },
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    }
   }, 
   {
     hooks: {
       beforeCreate: async (user) => {
         user.encrypted_password = await hashPassword(user.encrypted_password);
-      },
-      afterCreate: async (user) => {
-        const role = sequelize.models.role;
-        const userRole = await role.findByPk(user.roleId);
-
-        if (userRole.type === 'admin') return;
-
-        if (userRole.type === 'client') {
-          const client = sequelize.models.client;
-          await client.create({ userId: user.id })
-          return;
-        }
-        if (userRole.type === 'company') {
-          const company = sequelize.models.company;
-          await company.create({ userId: user.id });
-          return;
-        }
-      },
+      }
     },
     sequelize,
     modelName: 'user',
@@ -146,6 +130,12 @@ module.exports = (sequelize, DataTypes) => {
     personParams.userId = this.id;
     const person = await Person.create(personParams);
     return person;
+  }
+
+  user.prototype.createCompany = async function (companyParams, Company) {
+    companyParams.userId = this.id;
+    const company = await Company.create(companyParams);
+    return company;
   }
 
   return user;
