@@ -1,4 +1,8 @@
 'use strict';
+
+const ErrorHandler = require('../src/utils/error.util');
+const { badPasswordValidation } = require('../src/utils/errorcodes.util');
+
 const {
   Model
 } = require('sequelize');
@@ -51,5 +55,17 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'company',
   });
+
+  company.prototype.updateDetails = async function (user, data) {
+    if (data.encrypted_password) {
+      const isPasswordValid = await user.checkPasswordValidation(data.encrypted_password);
+      if (!isPasswordValid) {
+        throw new ErrorHandler(badPasswordValidation);
+      }
+    }
+    await user.update(data);
+    await this.update(data);
+  }
+
   return company;
 };

@@ -28,19 +28,46 @@ const getUsers = async (req, res, next) => {
 
 const getUserInfo = async (req, res, next) => {
   try {
-    const { id } = req.user
+    const { id } = req.user;
+
     const user = await User.findByPk(id, {
       attributes: { exclude: ['encrypted_password'] },
       include: {
-      model: Client,
-      as: 'client'
+        model: Role,
+        as: 'role',
+        attributes: ['type']
       }
     });
-    res.json(user)
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const userRoleType = user.role.type;
+
+    if (userRoleType === 'company') {
+      const userWithCompany = await User.findByPk(id, {
+        attributes: { exclude: ['encrypted_password'] },
+        include: {
+          model: Company,
+          as: 'company',
+        }
+      });
+      return res.json(userWithCompany);
+    } else {
+      const userWithClient = await User.findByPk(id, {
+        attributes: { exclude: ['encrypted_password'] },
+        include: {
+          model: Client,
+          as: 'client',
+        }
+      });
+      return res.json(userWithClient);
+    }
   } catch (error) {
-    next(error)
+    next(error);
   }
-}
+};
 
 const getUserInfoById = async (req, res, next) => {
   try {
@@ -141,7 +168,7 @@ const registerUser = async (req, res, next) => {
         location: req.body.location,
         userId: user.id,
       };
-      
+
       await Company.create(personalParams, { transaction });
     }
 
@@ -168,7 +195,7 @@ const loginUser = async (req, res, next) => {
       throw new ErrorHandler(passwordsDontMatch)
     }
     const role = await user.getRole()
-    if (role.type === 'normal' && !user.isActived) {
+    if (role.type !== 'admin' && !user.isActived) {
       throw new ErrorHandler(unauthorized)
     }
 
