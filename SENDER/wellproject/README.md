@@ -58,3 +58,23 @@ Reporte 9 enviado exitosamente.
 ```
 /bin/bash -l -c 'cd /path/to/your/project && bundle exec bin/rails runner '\''SendersController.new.fetch_unsent_and_send'\'' >> log/cron.log'
 ```
+
+## Sintaxis para leer archivo ``schedule.rb` con los cron jobs:
+
+La sintaxis de cron consta de cinco campos separados por espacios, que indican cuándo se debe ejecutar la tarea:
+
+1. **Minuto (0 - 59)**: Especifica el minuto de la hora.
+2. **Hora (0 - 23)**: Especifica la hora del día.
+3. **Día del mes (1 - 31)**: Especifica el día del mes.
+4. **Mes (1 - 12)**: Especifica el mes del año.
+5. **Día de la semana (0 - 6)**: Especifica el día de la semana (0 es domingo, 6 es sábado).
+
+Un asterisco (`*`) en cualquier campo significa "todos los valores posibles" para ese campo. Por ejemplo, un asterisco en el campo de mes significa que la tarea se ejecutará todos los meses.
+
+### Ejemplo -> se ejecuta a las 9 de la mañana, los 28 de cada mes.
+
+```ruby
+every '0 9 28 * *' do
+  runner "ReportSenderController.new.fetch_reports_and_sent_to_clients", output: { standard: 'log/cron.log' }
+end
+```
