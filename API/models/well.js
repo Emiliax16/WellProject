@@ -33,6 +33,10 @@ module.exports = (sequelize, DataTypes) => {
         args: true,
         msg: 'Este código ya está en uso.'
       },
+    },
+    editStatusDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
     }
   }, {
     sequelize,

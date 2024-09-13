@@ -57,12 +57,19 @@ const fetchUnsentReports = async (req, res, next) => {
     console.log("Buscando reportes no enviados")
     const unsentReports = await WellData.findAll({
       where: {
-        sent: false
+        sent: false,
+        createdAt: {
+          // solo incluir reportes creados después de la última edición del pozo
+          [Op.gte]: Sequelize.col('Well.editStatusDate')
+        }
       },
       include: [{
         model: Well,
         where: {
-          isActived: true
+          isActived: true,
+          editStatusDate: {
+            [Op.ne]: null
+          }
         }
       }]
     });

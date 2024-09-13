@@ -62,8 +62,11 @@ const activeOrDesactiveWell = async (req, res) => {
       ErrorHandler(unauthorized);
     }
 
-
     well.isActived = !well.isActived;
+
+    // actualizamos fecha de edición de estado
+    well.editStatusDate = new Date();
+
     await well.save();
     res.json(well);
   } catch (error) {
