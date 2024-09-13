@@ -53,7 +53,6 @@ const formatRequest = async (data) => {
     console.log("---- XML ----\n", xml);
     return xml;
   } catch (error) {
-    console.log('Error construyendo el XML:', error);
     throw error;
   }
 }
@@ -69,7 +68,6 @@ const postToDga = async (data) => {
     const parsedResponse = await xml2js.parseStringPromise(response.data);
     return parsedResponse;
   } catch (error) {
-    console.log('Error enviando la solicitud o procesando la respuesta:', error);
     if (error.response) {
       console.log('Datos de respuesta:', error.response.data);
     }
@@ -111,7 +109,11 @@ const processAndPostData = async (wellData) => {
   try {
     const formattedData = await formatRequest(data);
     const response = await postToDga(formattedData);
-    console.log('---- DGA RESPUSTA ----\n', JSON.stringify(response, null, 2));
+    const responseString = JSON.stringify(response, null, 2);
+    console.log('---- DGA RESPUESTA ----\n', responseString);
+
+    // no recibir respuesta es sinonimo de timeout
+    if (!response) return false;
 
     if (!checkValidResponse(response)) throw new ErrorHandler(wellDataHasInvalidData);
 
@@ -121,15 +123,15 @@ const processAndPostData = async (wellData) => {
   }
 }
 
-/* Data DUMMY -- no borrar todavía */
+/* Data DUMMY -- no borrar todavía
 const exampleData = {
   code: "OB-0902-639",
-  date: "31-08-2024",
-  hour: "22:00:00",
-  totalizador: 341,
+  date: "12-09-2024",
+  hour: "11:00:00",
+  totalizador: 354,
   caudal: 0,
-  nivel_freatico: 35.7
+  nivel_freatico: 36.42
 }
-processAndPostData(exampleData); //*/
+processAndPostData(exampleData); */
 
 module.exports = processAndPostData;
