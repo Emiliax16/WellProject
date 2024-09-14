@@ -60,15 +60,16 @@ const fetchUnsentReports = async (req, res, next) => {
         sent: false,
         createdAt: {
           // solo incluir reportes creados después de la última edición del pozo
-          [Op.gte]: Sequelize.col('Well.editStatusDate')
+          [db.Op.gte]: db.Sequelize.col('well.editStatusDate')
         }
       },
       include: [{
         model: Well,
+        as: 'well',
         where: {
           isActived: true,
           editStatusDate: {
-            [Op.ne]: null
+            [db.Op.ne]: null
           }
         }
       }]
@@ -76,6 +77,7 @@ const fetchUnsentReports = async (req, res, next) => {
 
     // Si no hay reportes no enviados, se envía un 404
     if (unsentReports.length === 0){
+      console.log("NO HAY REPORTES NO ENVIADOS!!!!!!!!!!!!!!!!")
       return res.status(404).send({
         message: 'No hay reportes no enviados'
       });
