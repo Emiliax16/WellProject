@@ -1,4 +1,13 @@
 
+set :environment, "development"
+set :output, "/home/rails/my_cron_log.log"
+set :environment, "development"
+env :PATH, ENV['PATH']
+env :GEM_HOME, ENV['GEM_HOME']
+env :GEM_PATH, ENV['GEM_PATH']
+env :BUNDLE_PATH, ENV['BUNDLE_PATH']
+env :BUNDLE_GEMFILE, ENV['BUNDLE_GEMFILE'] || '/rails/Gemfile'
+
 ################################ PARA PRODUCCION ################################
 
 # 1° OPCION CONTROLADOR: SendersController
