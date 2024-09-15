@@ -44,9 +44,7 @@ const repostToDGA = async (req, res, next) => {
   const { id: wellDataId } = req.body;
   try {
     const wellData = await WellData.findByPk(wellDataId);
-    console.log("Llegó el reporte a enviar: ", wellData.id);
-    //TODO: por el momento, NO enviaremos nada hasta tener el permiso del cliente
-    //await processAndPostData(wellData);
+    await processAndPostData(wellData);
     res.json({ message: "Reporte enviado correctamente." }).status(200);
   } catch (error) {
     next(error);
@@ -59,18 +57,27 @@ const fetchUnsentReports = async (req, res, next) => {
     console.log("Buscando reportes no enviados")
     const unsentReports = await WellData.findAll({
       where: {
-        sent: false
+        sent: false,
+        createdAt: {
+          // solo incluir reportes creados después de la última edición del pozo
+          [db.Op.gte]: db.Sequelize.col('well.editStatusDate')
+        }
       },
       include: [{
         model: Well,
+        as: 'well',
         where: {
-          isActived: true
+          isActived: true,
+          editStatusDate: {
+            [db.Op.ne]: null
+          }
         }
       }]
     });
 
     // Si no hay reportes no enviados, se envía un 404
     if (unsentReports.length === 0){
+      console.log("NO HAY REPORTES NO ENVIADOS!!!!!!!!!!!!!!!!")
       return res.status(404).send({
         message: 'No hay reportes no enviados'
       });

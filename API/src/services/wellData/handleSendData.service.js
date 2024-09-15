@@ -29,7 +29,7 @@ const formatRequest = async (data) => {
         'soapenv:Header': {
             'aut1:authSendDataExtraccionTraza': {
                 'aut1:codigoDeLaObra': data.code,
-                'aut1:timeStampOrigen': data.timeStampOrigen,
+                'aut1:timeStampOrigen': moment().utc().format("YYYY-MM-DDTHH:mm:ss[Z]"),
             },
         },
         'soapenv:Body': {
@@ -50,9 +50,9 @@ const formatRequest = async (data) => {
             },
         },
     });
+    console.log("---- XML ----\n", xml);
     return xml;
   } catch (error) {
-    console.log('Error construyendo el XML:', error);
     throw error;
   }
 }
@@ -68,7 +68,6 @@ const postToDga = async (data) => {
     const parsedResponse = await xml2js.parseStringPromise(response.data);
     return parsedResponse;
   } catch (error) {
-    console.log('Error enviando la solicitud o procesando la respuesta:', error);
     if (error.response) {
       console.log('Datos de respuesta:', error.response.data);
     }
@@ -78,7 +77,7 @@ const postToDga = async (data) => {
 const checkValidResponse = (response) => {
   let breakIteration = false;
 
-  if (!response['soapenv:Envelope'] || !response['soapenv:Envelope']['soapenv:Body']) {
+  if (!response || !response['soapenv:Envelope'] || !response['soapenv:Envelope']['soapenv:Body']) {
     return false;
   }
 
@@ -110,7 +109,11 @@ const processAndPostData = async (wellData) => {
   try {
     const formattedData = await formatRequest(data);
     const response = await postToDga(formattedData);
-    console.log('---- DGA RESPUSTA ----\n', JSON.stringify(response, null, 2));
+    const responseString = JSON.stringify(response, null, 2);
+    console.log('---- DGA RESPUESTA ----\n', responseString);
+
+    // no recibir respuesta es sinonimo de timeout
+    if (!response) return false;
 
     if (!checkValidResponse(response)) throw new ErrorHandler(wellDataHasInvalidData);
 
@@ -122,12 +125,12 @@ const processAndPostData = async (wellData) => {
 
 /* Data DUMMY -- no borrar todavía
 const exampleData = {
-  code: "TEST12345",
-  date: "12-09-2027", 
-  hour: "12:31:00",
-  totalizador: 5,
-  caudal: 1,
-  nivel_freatico: 5.8
+  code: "OB-0902-639",
+  date: "12-09-2024",
+  hour: "11:00:00",
+  totalizador: 354,
+  caudal: 0,
+  nivel_freatico: 36.42
 }
 processAndPostData(exampleData); */
 

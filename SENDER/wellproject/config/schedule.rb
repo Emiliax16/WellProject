@@ -1,32 +1,51 @@
-# Use this file to easily define all of your cron jobs.
-#
-# It's helpful, but not entirely necessary to understand cron before proceeding.
-# http://en.wikipedia.org/wiki/Cron
 
-# Example:
-#
-# set :output, "/path/to/my/cron_log.log"
-#
-# every 2.hours do
-#   command "/usr/bin/some_great_command"
-#   runner "MyModel.some_method"
-#   rake "some:great:rake:task"
-# end
-#
-# every 4.days do
-#   runner "AnotherModel.prune_old_records"
-# end
+################################ PARA PRODUCCION ################################
 
-# Learn more: http://github.com/javan/whenever
+# 1° OPCION CONTROLADOR: SendersController
+#every :day, at: '6:00 am' do
+#  runner "SendersController.new.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
+#end
 
-# CRON JOB para ejecutarse todos los días a las 6 de la mañana, va a mandar todos los repotres que tengan sent en flase 
-every :day, at: '6:00 am' do
-  runner "SendersController.new.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
-end
+# 2° OPCION MODELO: Sender
+#every :day, at: '6:00 am' do
+#  runner "Sender.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
+#end
 
-# CRON JOB para ejecutarse cada 10 minutos, es para tests, se puede bajar a 1 minutos y ver el
-# archivo log/cron.log para ver que se ejecuta correctamente
+# 3° OPCION RAKE
+#every :day, at: '6:00 am' do
+#  rake "sender:fetch_unsent_and_send", output: { standard: 'log/cron_rake.log' }
+#end
+
+# 4° OPCION COMMAND
+#every :day, at: '6:00 am' do
+# command "cd /home/emiliax/WellProject/SENDER/wellproject && bundle exec rake sender:fetch_unsent_and_send RAILS_ENV=production"
+#end
+
+# OPCION SYSTEAM
+#every :day, at: '6:00 am' do
+#  system("cd /home/emiliax/WellProject/SENDER/wellproject && bundle exec rails runner 'SendersController.new.fetch_unsent_and_send'", output: { standard: 'log/cron_system.log' })
+#end
+
+
+
+################################ PARA TESTEAR ################################
 #every 1.minute do
 #  runner "SendersController.new.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
+#end
+
+#every 1.minute do
+#  runner "Sender.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
+#end
+
+#every 1.minute do
+#  rake "sender:fetch_unsent_and_send", output: { standard: 'log/cron_rake.log' }
+#end
+
+#every 1.minute do
+#  command "cd /home/emiliax/WellProject/SENDER/wellproject && bundle exec rake sender:fetch_unsent_and_send RAILS_ENV=production", output: { standard: 'log/cron_command.log' }
+#end
+
+#every 1.minute do
+#  system("cd /home/emiliax/WellProject/SENDER/wellproject && bundle exec rails runner 'SendersController.new.fetch_unsent_and_send'", output: { standard: 'log/cron_system.log' })
 #end
 
