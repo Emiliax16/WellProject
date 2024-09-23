@@ -12,9 +12,9 @@
 #end
 
 # 3° OPCION RAKE
-#every :day, at: '6:00 am' do
-#  rake "sender:fetch_unsent_and_send", output: { standard: 'log/cron_rake.log' }
-#end
+every :day, at: '6:00 am' do
+  rake "sender:fetch_unsent_and_send", output: { standard: 'log/cron_rake.log' }
+end
 
 # 4° OPCION COMMAND
 #every :day, at: '6:00 am' do

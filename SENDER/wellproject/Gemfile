@@ -10,7 +10,9 @@ gem 'pry-byebug'
 gem 'webmock'
 
 # Cron job
-gem 'whenever', require: false
+group :development, :test, :production do
+  gem 'whenever', require: false
+end
 
 # ENV
 gem 'dotenv-rails'
