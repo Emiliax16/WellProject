@@ -1,4 +1,4 @@
-# WellProject/SENDER
+# WellProject/SENDER/wellproject
 
 Repositorio encargado de conseguir todos los reportes no enviados a la dga desde la `/API`. Luego de obtenerlos, se envían al endpoint encargado de postear a la dga, con una diferencia de 10 segundos en cada envío. La lógica de envíos se automatiza mediante el uso de `cron_jobs`, que se traduce en una tarea programada que se ejecutará en un intervalo predifinido. En nuestro caso, se ejecuta cada día a las 6am. El archivo encargado de ejecutar esta tarea es `SENDER\wellproject\config\schedule.rb`.
 
