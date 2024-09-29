@@ -98,6 +98,20 @@ chown -R rails:rails /usr/local/lib/ruby/gems/3.0.0
 chown -R rails:rails /usr/local/bin
 ```
 
+3.1 Moverse a user rails, instalar el bundle y actualizar el crontab
+```
+su - rails
+bundle install
+whenever --update-crontab
+gem list // para comprobar que todo esta en orden
+```
+3.1.2 Volver a root
+```
+ctrl + d
+service cron start
+tail -f log/cron_rake.log
+```
+
 3.2 Reconstrucción y Ejecución de los Contenedores
 Después de asegurarnos de que los permisos eran correctos:
 ```sh
