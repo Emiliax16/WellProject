@@ -41,6 +41,11 @@ const wellNotFound = {
   message: 'El pozo no existe',
 }
 
+const wellDataDatesAreInvalid = {
+  code: 400,
+  message: 'Las fechas para filtrar el reporte son inválidas',
+}
+
 const wellHasDataAssociated = {
   code: 400,
   message: 'No se puede eliminar o editar un pozo con reportes asociados',
@@ -103,5 +108,6 @@ module.exports = {
   wellHasDataAssociated,
   wellDataHasInvalidData,
   companyNotFound,
-  clientDoesntBelongToCompany
+  clientDoesntBelongToCompany,
+  wellDataDatesAreInvalid
 }

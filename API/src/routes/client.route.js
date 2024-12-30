@@ -13,6 +13,7 @@ const {
   getWellData,
   createClientWell,
   addDataToClientWell,
+  getOneWell,
 } = require('../controllers/client.controller');
 const {
   AllRoles,
@@ -26,6 +27,7 @@ const router = express.Router();
 // Por ahora lo dejare tal cuaal como estaba y simplemnte dejare pasar tambien a company
 router.get('/clients', authMiddleware(...AllRoles), getAllClients); 
 router.get('/clients/:id/wells', authMiddleware(...AllRoles), getClientWells);
+router.get('/clients/:id/wells/:code', authMiddleware(...AllRoles), getOneWell);
 router.get('/clients/:id/wells/:code/data', authMiddleware(...AllRoles), getWellData);
 router.put('/clients/:id/edit', authMiddleware(...AllRoles), checkTroll(), validateParams(editDataOfClient), editClient);
 router.post('/clients/:id/wells/create', authMiddleware(...AllRoles), validateParams(createWell), createClientWell);

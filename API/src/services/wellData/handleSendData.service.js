@@ -65,11 +65,13 @@ const postToDga = async (data) => {
             'SOAPAction': SOAP_ACTION,
         },
     });
+
     const parsedResponse = await xml2js.parseStringPromise(response.data);
     return parsedResponse;
   } catch (error) {
     if (error.response) {
-      console.log('Datos de respuesta:', error.response.data);
+      console.log('Error Response Status:', error.response.status);
+      console.log('Datos de respuesta ERRONEA:', error.response.data);
     }
   }
 }

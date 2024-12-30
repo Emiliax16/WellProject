@@ -10,6 +10,7 @@ const {
   wellHasDataAssociated,
 } = require('../utils/errorcodes.util');
 const getPaginationParameters = require('../utils/query-params.util');
+const defineDateCondition = require('../utils/month-year-params.util');
 
 const Client = db.client;
 const Well = db.well;
@@ -133,6 +134,31 @@ const getClientWells = async (req, res, next) => {
   }
 }
 
+//              GET ONE WELL OF A CLIENT
+const getOneWell = async (req, res, next) => {
+  try {
+    const { id: clientId, code } = req.params;
+
+    const client = await Client.findByPk(clientId);
+    if (!client) {
+      throw new ErrorHandler(userHasNoClientAssociated);
+    }
+
+    if (!checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
+    }
+
+    const well = await Well.findOne({ where: { code: code, clientId: client.id } });
+    if (!well) {
+      throw new ErrorHandler(wellNotFound);
+    }
+
+    res.json(well);
+  } catch (error) {
+    next(error);
+  }
+}
+
 // EDIT A WELL OF A CLIENT
 
 const editClientWell = async (req, res, next) => {
@@ -223,8 +249,14 @@ const getWellData = async (req, res, next) => {
       throw new ErrorHandler(wellNotFound);
     }
     const { limit, offset } = getPaginationParameters(req.query);
+    const { startDate, endDate } = defineDateCondition(req.query);
+
     const wellData = await WellData.findAndCountAll({
-      where: { code: well.code },
+      where: { code: well.code,
+        createdAt: {
+          [db.Op.between]: [startDate, endDate]
+       },
+      },
       limit,
       offset,
       order: [['createdAt', 'DESC']],
@@ -288,4 +320,5 @@ module.exports = {
   getWellData,
   createClientWell,
   addDataToClientWell,
+  getOneWell,
 }

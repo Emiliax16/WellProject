@@ -38,7 +38,73 @@ const createWellData = async (req, res) => {
       message: error.message || 'Some error occurred while creating the WellData'
     });
   }
-}
+} 
+
+const repostAllReportsToDGA = async (req, res, next) => {
+  try {
+    const { reportIds } = req.body;
+
+    if (!reportIds || reportIds.length === 0) {
+      return res.status(400).send({
+        message: 'No se proporcionaron reportes para enviar.'
+      });
+    }
+
+    const reports = await WellData.findAll({
+      where: {
+        id: {
+          [db.Op.in]: reportIds
+        }
+      }
+    });
+
+    console.log('Pending reports BACKKKK IDDD:', reportIds);
+
+    if (reports.length === 0) {
+      return res.status(404).send({
+        message: 'No se encontraron reportes para enviar.'
+      });
+    }
+
+    // Procesar los reportes en paralelo con concurrencia limitada
+    const concurrencyLimit = 3; // Limitar la cantidad de envíos simultáneos
+    const promises = [];
+    let activePromises = 0;
+
+    for (const report of reports) {
+      if (activePromises >= concurrencyLimit) {
+        await Promise.race(promises); // Esperar a que uno termine
+      }
+
+      const promise = processAndPostData(report)
+        .then((success) => {
+          if (success) {
+            console.log(`Reporte ${report.id} enviado correctamente.`);
+          } else {
+            console.error(`Reporte ${report.id} falló en el envío.`);
+          }
+        })
+        .catch((error) => {
+          console.error(`Error crítico al enviar reporte ${report.id}:`, error.message);
+        })
+        .finally(() => {
+          activePromises--;
+        });
+
+      promises.push(promise);
+      activePromises++;
+    }
+
+    // Esperar a que todos los procesos terminen
+    await Promise.all(promises);
+
+
+    res.status(200).json({ message: "Se intentó enviar todos los reportes." });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 const repostToDGA = async (req, res, next) => {
   const { id: wellDataId } = req.body;
@@ -97,5 +163,6 @@ const fetchUnsentReports = async (req, res, next) => {
 module.exports = {
   createWellData,
   fetchUnsentReports,
-  repostToDGA
+  repostToDGA,
+  repostAllReportsToDGA
 }
