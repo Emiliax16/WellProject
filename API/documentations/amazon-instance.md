@@ -2,8 +2,8 @@
 
 ## Cómo ingresar a la instancia de Amazon
 
-1.Ubica tu archivo .pem: Asegúrate de tener el archivo .pem necesario para acceder a la instancia.
-2.Conéctate a la instancia con SSH:
+1. Ubica tu archivo .pem: Asegúrate de tener el archivo .pem necesario para acceder a la instancia.
+2. Conéctate a la instancia con SSH:
 ```ssh -i tu_archivo.pem usuario@IP_PUBLICA```
 Ejemplo: `ssh -i wellproject.pem ubuntu@52.12.34.56`
 3. Navega por la instancia:
