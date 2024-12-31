@@ -14,3 +14,5 @@ El proyecto se basa en la creación de una aplicación que permita gestionar dif
   - [Modelos de datos](documentations/model.md)
 - Comandos útiles
   - [Modo de uso de técnologías](documentations/sequelize-command.md)
+- Instancia de Amazon
+  - [Navegación y comandos](documentations/amazon-instance.md)
