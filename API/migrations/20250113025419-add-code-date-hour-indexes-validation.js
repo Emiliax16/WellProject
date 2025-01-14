@@ -4,9 +4,9 @@
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.addConstraint("wellData", {
-      fields: ["date", "hour"],
+      fields: ["date", "hour", "code"],
       type: "unique",
-      name: "unique_date_hour_constraint",
+      name: "unique_code_date_hour_constraint",
     });
   },
 
@@ -14,7 +14,7 @@ module.exports = {
     down: async (queryInterface, Sequelize) => {
       await queryInterface.removeConstraint(
         "wellData",
-        "unique_date_hour_constraint"
+        "unique_code_date_hour_constraint"
       );
     };
   },
