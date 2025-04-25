@@ -95,6 +95,12 @@ const bulkCreateWellDataIsNotArray = {
   message: "Se esperaba un arreglo de reportes",
 };
 
+const couldntPostToDga = {
+  code: 400,
+  message:
+    "No se pudo enviar los datos a la DGA. Por favor revisa bien los parámetros que estás enviando",
+};
+
 module.exports = {
   userNotFound,
   missingParams,
@@ -115,4 +121,5 @@ module.exports = {
   clientDoesntBelongToCompany,
   wellDataDatesAreInvalid,
   bulkCreateWellDataIsNotArray,
+  couldntPostToDga,
 };
