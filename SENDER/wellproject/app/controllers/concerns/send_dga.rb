@@ -11,8 +11,9 @@ class SendDga
   def send_data
     reports.each do |report|
       send_report(report)
-      # Hay que esperar 15 seg entre cada envío según el docimento de la dga
-      sleep 15
+      # Hay que esperar 5 minutos entre cada envío según el docimento de la dga
+      # https://dga.mop.gob.cl/uploads/sites/13/2024/08/Transmision_mee_subterraneas_nueva-API.pdf
+      sleep 300
     end
   end
 
