@@ -1,4 +1,3 @@
-
 ################################ PARA PRODUCCION ################################
 
 # 1° OPCION CONTROLADOR: SendersController
@@ -10,11 +9,18 @@
 #every :day, at: '6:00 am' do
 #  runner "Sender.fetch_unsent_and_send", output: { standard: 'log/cron.log' }
 #end
+job_type :rake, "cd :path && :environment_variable=:environment bundle exec rake :task :output"
+set :environment, 'production'
+set :output, { standard: 'log/cron_rake.log', error: 'log/cron_rake_error.log' }
+# para testear
+#every 1.minute do
+#  rake "sender:fetch_unsent_and_send"
+#end
 
-# 3° OPCION RAKE
-every :day, at: '6:00 am' do
-  rake "sender:fetch_unsent_and_send", output: { standard: 'log/cron_rake.log' }
-end
+# 3° OPCION RAKE DESCOMENTAR ESTO CUANDO ESTÉ TERMINADO ESTE ES EL OFICIAL QUE FUNCIONA 1!!!!!!
+#every :day, at: '6:00 am' do
+#  rake "sender:fetch_unsent_and_send"
+#end
 
 # 4° OPCION COMMAND
 #every :day, at: '6:00 am' do

@@ -32,18 +32,18 @@ services:
     ports:
       - "5432:5432"  # Mapea el puerto 5432 del contenedor al mismo puerto en el host
     <<: *container-defaults
-  #sender:
-  #  build:
-  #    context: ./SENDER/wellproject
-  #    dockerfile: Dockerfile
-  #  container_name: sender
-  #  env_file:
-  #    - ./SENDER/wellproject/.env
-  #  volumes:
-  #    - ./SENDER/wellproject:/rails
-  #  depends_on:
-  #    - api
-  #    - db
-  #  restart: unless-stopped
+  sender:
+    build:
+      context: ./SENDER/wellproject
+      dockerfile: Dockerfile
+    container_name: sender
+    env_file:
+      - ./SENDER/wellproject/.env
+    volumes:
+      - ./SENDER/wellproject:/rails
+    depends_on:
+      - api
+      - db
+    restart: unless-stopped
 volumes:
   postgres_data:   # Define el volumen para almacenar datos
