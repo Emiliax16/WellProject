@@ -5,6 +5,7 @@ const WellData = db.wellData;
 
 const processAndPostData = require("../services/wellData/handleSendData.service");
 const ErrorHandler = require("../utils/error.util");
+const moment = require("moment-timezone");
 const { bulkCreateWellDataIsNotArray } = require("../utils/errorcodes.util");
 
 const createWellData = async (req, res) => {
@@ -182,12 +183,17 @@ const fetchUnsentReports = async (req, res, next) => {
   try {
     // Se obtienen todos los reportes no mandados de pozos activos
     console.log("Buscando reportes no enviados");
+
+    // Obtener fecha actual en zona horaria correcta (Chile) y restar 2 horas
+    const twoHoursAgo = moment().tz("America/Santiago").subtract(2, "hours").toDate();
+
     const unsentReports = await WellData.findAll({
       where: {
         sent: false,
         createdAt: {
           // solo incluir reportes creados después de la última edición del pozo
           [db.Op.gte]: db.Sequelize.col("well.editStatusDate"),
+          [db.Op.lte]: twoHoursAgo, // createdAt debe ser <= ahora - 2h
         },
       },
       include: [
