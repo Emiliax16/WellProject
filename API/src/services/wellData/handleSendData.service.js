@@ -51,9 +51,9 @@ const processAndPostData = async (wellData) => {
 const formaDataV2 = async (data) => {
   return {
     autenticacion: {
-      rutEmpresa: process.env.DGA_RUT,
+      rutEmpresa: process.env.DGA_RUT_COMPANY,
       password: process.env.DGA_PASSWORD,
-      rutUsuario: process.env.DGA_USER_RUT,
+      rutUsuario: process.env.DGA_RUT,
     },
     medicionSubterranea: {
       caudal: data.caudal.toString(),
