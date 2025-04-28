@@ -11,12 +11,12 @@ function validateParams(paramsSpec, registerUser = false) {
     // necesitan parámetros de Person, pero si es empresa, se necesitan parámetros
     // de Company
     if (registerUser) {
-      if (req.body.roleType === 'admin' || req.body.roleType === 'normal') {
+      if (req.user.type === 'admin' || req.user.type === 'normal' || req.body.roleType == 'admin' || req.body.roleType == 'normal') {
         // excluir campos específicos de Company
         delete paramsSpec.companyLogo;
         delete paramsSpec.companyRut;
         delete paramsSpec.recoveryEmail;
-      } else if (req.body.roleType === 'company') {
+      } else if (req.user.type == 'company' || req.body.roleType === 'company') {
         // excluir campos específicos de Person
         delete paramsSpec.fullName;
         delete paramsSpec.location;

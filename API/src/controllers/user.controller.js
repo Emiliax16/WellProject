@@ -1,9 +1,13 @@
-const db = require('../../models');
-const client = require('../../models/client');
-const ErrorHandler = require('../utils/error.util');
-const { userNotFound, passwordsDontMatch, unauthorized } = require('../utils/errorcodes.util');
-const checkPermissionsForClientResources = require('../utils/check-permissions');
-const company = require('../../models/company');
+const db = require("../../models");
+const client = require("../../models/client");
+const ErrorHandler = require("../utils/error.util");
+const {
+  userNotFound,
+  passwordsDontMatch,
+  unauthorized,
+} = require("../utils/errorcodes.util");
+const checkPermissionsForClientResources = require("../utils/check-permissions");
+const company = require("../../models/company");
 const { sequelize } = db;
 const User = db.user;
 const Client = db.client;
@@ -17,50 +21,50 @@ const getUsers = async (req, res, next) => {
   try {
     const users = await User.findAll({
       attributes: {
-        exclude: ['encrypted_password']
-      }
-    })
-    res.json(users)
+        exclude: ["encrypted_password"],
+      },
+    });
+    res.json(users);
   } catch (error) {
-    next(error)
+    next(error);
   }
-}
+};
 
 const getUserInfo = async (req, res, next) => {
   try {
     const { id } = req.user;
 
     const user = await User.findByPk(id, {
-      attributes: { exclude: ['encrypted_password'] },
+      attributes: { exclude: ["encrypted_password"] },
       include: {
         model: Role,
-        as: 'role',
-        attributes: ['type']
-      }
+        as: "role",
+        attributes: ["type"],
+      },
     });
 
     if (!user) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     const userRoleType = user.role.type;
 
-    if (userRoleType === 'company') {
+    if (userRoleType === "company") {
       const userWithCompany = await User.findByPk(id, {
-        attributes: { exclude: ['encrypted_password'] },
+        attributes: { exclude: ["encrypted_password"] },
         include: {
           model: Company,
-          as: 'company',
-        }
+          as: "company",
+        },
       });
       return res.json(userWithCompany);
     } else {
       const userWithClient = await User.findByPk(id, {
-        attributes: { exclude: ['encrypted_password'] },
+        attributes: { exclude: ["encrypted_password"] },
         include: {
           model: Client,
-          as: 'client',
-        }
+          as: "client",
+        },
       });
       return res.json(userWithClient);
     }
@@ -72,24 +76,24 @@ const getUserInfo = async (req, res, next) => {
 const getUserInfoById = async (req, res, next) => {
   try {
     // si los id no son iguales, solo se puede proceder si el rol del usuario es admin
-    const { id: clientId } = req.params
+    const { id: clientId } = req.params;
 
     const client = await Client.findByPk(clientId);
     const userId = client.userId;
 
     if (!checkPermissionsForClientResources(req.user, client)) {
-      throw new ErrorHandler(unauthorized)
+      throw new ErrorHandler(unauthorized);
     }
 
     const user = await User.findByPk(userId, {
-      attributes: { exclude: ['encrypted_password'] },  
+      attributes: { exclude: ["encrypted_password"] },
       include: {
         model: Person,
-        as: 'person',
+        as: "person",
         attributes: {
-          exclude: ['userId']
-        }
-      }
+          exclude: ["userId"],
+        },
+      },
     });
 
     if (!user) {
@@ -104,14 +108,14 @@ const getUserInfoById = async (req, res, next) => {
 
     const userWithRole = {
       ...user.toJSON(),
-      role: role.type
+      role: role.type,
     };
 
     res.json(userWithRole);
   } catch (error) {
-    next(error)
+    next(error);
   }
-}
+};
 
 //                USER WELLS
 
@@ -142,20 +146,23 @@ const registerUser = async (req, res, next) => {
       throw new ErrorHandler(userNotFound);
     }
 
-    const user = await User.create(userParams, { transaction, individualHooks: true });
+    const user = await User.create(userParams, {
+      transaction,
+      individualHooks: true,
+    });
 
-    if (role.type === 'normal') {
+    if (role.type === "normal") {
       await Client.create({ userId: user.id }, { transaction });
     }
 
     let personalParams = {};
-    if (role.type === 'normal' || role.type === 'admin') {
+    if (role.type === "normal" || role.type === "admin") {
       personalParams = {
         fullName: req.body.fullName,
         location: req.body.location,
         phoneNumber: req.body.phoneNumber,
         personalEmail: req.body.personalEmail,
-        userId: user.id
+        userId: user.id,
       };
 
       await Person.create(personalParams, { transaction });
@@ -185,57 +192,56 @@ const registerUser = async (req, res, next) => {
 
 const loginUser = async (req, res, next) => {
   try {
-    const { email, password } = req.body
-    const user = await User.findOne({ where: { email } })
+    const { email, password } = req.body;
+    const user = await User.findOne({ where: { email } });
     if (!user) {
-      throw new ErrorHandler(userNotFound)
+      throw new ErrorHandler(userNotFound);
     }
-    const isValid = await user.checkPassword(password)
+    const isValid = await user.checkPassword(password);
     if (!isValid) {
-      throw new ErrorHandler(passwordsDontMatch)
+      throw new ErrorHandler(passwordsDontMatch);
     }
-    const role = await user.getRole()
-    if (role.type !== 'admin' && !user.isActived) {
-      throw new ErrorHandler(unauthorized)
+    const role = await user.getRole();
+    if (role.type !== "admin" && !user.isActived) {
+      throw new ErrorHandler(unauthorized);
     }
 
-    delete user.dataValues.encrypted_password
-    const token = await user.generateToken()
-    res.status(201).json({ user, token })
+    delete user.dataValues.encrypted_password;
+    const token = await user.generateToken();
+    res.status(201).json({ user, token });
+  } catch (error) {
+    next(error);
   }
-  catch (error) {
-    next(error)
-  }
-}
+};
 
 const getUserRoleById = async (req, res, next) => {
   try {
-    const { id } = req.params
-    const user = await User.findByPk(id)
+    const { id } = req.params;
+    const user = await User.findByPk(id);
 
     if (!user) {
-      throw new ErrorHandler(userNotFound)
+      throw new ErrorHandler(userNotFound);
     }
 
-    const role = await user.getRole()
+    const role = await user.getRole();
     if (!role) {
-      throw new ErrorHandler(userNotFound)
+      throw new ErrorHandler(userNotFound);
     }
 
-    res.status(200).json(role)
+    res.status(200).json(role);
   } catch (error) {
-    throw new ErrorHandler(userNotFound)
+    throw new ErrorHandler(userNotFound);
   }
-}
+};
 
 const getAllUserRoles = async (req, res, next) => {
   try {
-    const roles = await Role.findAll()
-    res.status(200).json(roles)
+    const roles = await Role.findAll();
+    res.status(200).json(roles);
   } catch (error) {
-    next(error)
+    next(error);
   }
-}
+};
 
 module.exports = {
   getUsers,
@@ -245,5 +251,4 @@ module.exports = {
   loginUser,
   getUserRoleById,
   getAllUserRoles,
-}
-
+};
