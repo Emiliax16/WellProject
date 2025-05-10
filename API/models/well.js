@@ -39,15 +39,15 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     rutEmpresa: {
-      allowNull: false,
+      allowNull: true,
       type: DataTypes.STRING,
     },
     rutUsuario: {
-      allowNull: false,
+      allowNull: true,
       type: DataTypes.STRING,
     },
     password: {
-      allowNull: false,
+      allowNull: true,
       type: DataTypes.STRING,
     },
   }, {
