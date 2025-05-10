@@ -54,18 +54,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         type: DataTypes.STRING,
       },
-      rutEmpresa: {
-        allowNull: false,
-        type: DataTypes.STRING,
-      },
-      rutUsuario: {
-        allowNull: false,
-        type: DataTypes.STRING,
-      },
-      password: {
-        allowNull: false,
-        type: DataTypes.STRING,
-      },
     },
     {
       hooks: {

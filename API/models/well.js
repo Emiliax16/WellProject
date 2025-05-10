@@ -37,7 +37,19 @@ module.exports = (sequelize, DataTypes) => {
     editStatusDate: {
       type: DataTypes.DATE,
       allowNull: true,
-    }
+    },
+    rutEmpresa: {
+      allowNull: false,
+      type: DataTypes.STRING,
+    },
+    rutUsuario: {
+      allowNull: false,
+      type: DataTypes.STRING,
+    },
+    password: {
+      allowNull: false,
+      type: DataTypes.STRING,
+    },
   }, {
     sequelize,
     modelName: 'well',
