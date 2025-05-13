@@ -1,7 +1,12 @@
 const ErrorHandler = require('../utils/error.util');
+const {
+  userNotFound
+} = require("../utils/errorcodes.util");
+const db = require("../../models");
+const Role = db.role;
 
 function validateParams(paramsSpec, registerUser = false) {
-  return function(req, res, next) {
+  return async function (req, res, next) {
     const errors = [];
     const forbidden = [];
     const params = []
@@ -10,13 +15,21 @@ function validateParams(paramsSpec, registerUser = false) {
     // hacer una excepción, puesto que si el usuario es normal o admin, se
     // necesitan parámetros de Person, pero si es empresa, se necesitan parámetros
     // de Company
+
+    let type = req.body.roleType;
+
+    if (!type) {
+      const role = await Role.findByPk(req.body.roleId)
+      type = role?.type
+    }
+
     if (registerUser) {
-      if (req.user.type === 'admin' || req.user.type === 'normal' || req.body.roleType == 'admin' || req.body.roleType == 'normal') {
+      if (type == 'admin' || type == 'normal') {
         // excluir campos específicos de Company
         delete paramsSpec.companyLogo;
         delete paramsSpec.companyRut;
         delete paramsSpec.recoveryEmail;
-      } else if (req.user.type == 'company' || req.body.roleType === 'company') {
+      } else if (type === 'company') {
         // excluir campos específicos de Person
         delete paramsSpec.fullName;
         delete paramsSpec.location;
@@ -46,7 +59,7 @@ function validateParams(paramsSpec, registerUser = false) {
       });
     }
     if (forbidden.length > 0) {
-      const forbiddenParametersMessage = `Parámetro(s) prohibido(s) enviado(s): ${forbidden.join(', ')  }`;
+      const forbiddenParametersMessage = `Parámetro(s) prohibido(s) enviado(s): ${forbidden.join(', ')}`;
       throw new ErrorHandler({
         message: forbiddenParametersMessage,
         code: 400,
@@ -64,4 +77,4 @@ function validateParams(paramsSpec, registerUser = false) {
   };
 }
 
-module.exports =  validateParams;
+module.exports = validateParams;

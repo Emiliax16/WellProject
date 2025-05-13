@@ -25,6 +25,6 @@ router.get('/users/data/:id', authMiddleware(...AllRoles), getUserInfoById);
 router.post('/users/register',  authMiddleware(...AdminAndCompany), validateParams(registerParams, true), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
 router.get('/users/role/:id', authMiddleware(...AllRoles), getUserRoleById);
-router.get('/users/roles', authMiddleware(...Admin), getAllUserRoles);
+router.get('/users/roles', authMiddleware(...AdminAndCompany), getAllUserRoles);
 
 module.exports = router;

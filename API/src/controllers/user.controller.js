@@ -130,7 +130,7 @@ const registerUser = async (req, res, next) => {
     if (!checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
     }
-
+    
     const userParams = {
       name: req.body.name,
       email: req.body.email,
@@ -152,9 +152,14 @@ const registerUser = async (req, res, next) => {
     });
 
     if (role.type === "normal") {
-      await Client.create({ userId: user.id }, { transaction });
-    }
+      const clientParams = { userId: user.id };
+      if (req.body.companyId) {
+        clientParams.companyId = parseInt(req.body.companyId, 10);
+      }
 
+      await Client.create(clientParams, { transaction });
+    }
+    
     let personalParams = {};
     if (role.type === "normal" || role.type === "admin") {
       personalParams = {
