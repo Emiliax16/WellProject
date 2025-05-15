@@ -63,7 +63,7 @@ module.exports = (sequelize, DataTypes) => {
             const well = await wellData.getWell();
 
             if (well.isActived) {
-              await processAndPostData(wellData);
+              await processAndPostData(wellData, well);
             }
           } catch (error) {
             console.log(error);

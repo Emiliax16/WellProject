@@ -21,9 +21,10 @@ const fixNumberFormat = (number) => {
 /**
  * @description Procesa los datos de un pozo y los envía a la DGA
  */
-const processAndPostData = async (wellData) => {
+const processAndPostData = async (wellData, well) => {
   try {
-    const formatedData = await formaDataV2(wellData);
+    const data = {...wellData, ...well}
+    const formatedData = await formaDataV2(data);
     const response = await postToDgaV2(formatedData, wellData.code);
     console.log("Response from DGA:", response.data);
     if (!checkValidResponseV2(response))
