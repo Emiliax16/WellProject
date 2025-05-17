@@ -12,7 +12,7 @@ async function generateToken(user) {
     id: user.id,
     type: type,
   };
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
 }
 
 function decodeToken(token) {
