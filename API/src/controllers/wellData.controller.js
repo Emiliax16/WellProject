@@ -112,12 +112,18 @@ const repostAllReportsToDGA = async (req, res, next) => {
     }
 
     const reports = await WellData.findAll({
-      where: {
-        id: {
-          [db.Op.in]: reportIds,
-        },
-      },
-    });
+                                    where: {
+                                      id: {
+                                        [db.Op.in]: reportIds,
+                                      },
+                                    },
+                                    include: [
+                                      {
+                                        model: Well,
+                                        as: 'well',
+                                      },
+                                    ],
+                                  });
 
     console.log("Pending reports BACKKKK IDDD:", reportIds);
 
@@ -137,7 +143,8 @@ const repostAllReportsToDGA = async (req, res, next) => {
         await Promise.race(promises); // Esperar a que uno termine
       }
 
-      const promise = processAndPostData(report)
+      let well = report.well;
+      const promise = processAndPostData(report, well)
         .then((success) => {
           if (success) {
             console.log(`Reporte ${report.id} enviado correctamente.`);
@@ -172,7 +179,8 @@ const repostToDGA = async (req, res, next) => {
   const { id: wellDataId } = req.body;
   try {
     const wellData = await WellData.findByPk(wellDataId);
-    await processAndPostData(wellData);
+    const well = await wellData.getWell();
+    await processAndPostData(wellData, well);
     res.json({ message: "Reporte enviado correctamente." }).status(200);
   } catch (error) {
     next(error);
