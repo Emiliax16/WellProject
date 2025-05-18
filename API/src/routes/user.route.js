@@ -12,7 +12,7 @@ const {
   getAllUserRoles,
 } = require('../controllers/user.controller');
 const {
-  AllRoles,
+  AdminAndCompanyAndNormal,
   AdminAndCompany,
   Admin,
   AdminAndCompanyAndDistributor
@@ -21,11 +21,11 @@ console.log(...AdminAndCompany);
 const router = express.Router();
 
 router.get('/users', getUsers);
-router.get('/users/data', authMiddleware(...AllRoles), getUserInfo);
-router.get('/users/data/:id', authMiddleware(...AllRoles), getUserInfoById);
+router.get('/users/data', authMiddleware(...AdminAndCompanyAndNormal), getUserInfo);
+router.get('/users/data/:id', authMiddleware(...AdminAndCompanyAndNormal), getUserInfoById);
 router.post('/users/register',  authMiddleware(...AdminAndCompanyAndDistributor), validateParams(registerParams, true), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
-router.get('/users/role/:id', authMiddleware(...AllRoles), getUserRoleById);
+router.get('/users/role/:id', authMiddleware(...AdminAndCompanyAndNormal), getUserRoleById);
 router.get('/users/roles', authMiddleware(...AdminAndCompany), getAllUserRoles);
 
 module.exports = router;
