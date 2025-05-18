@@ -15,6 +15,8 @@ function validateParams(paramsSpec, registerUser = false) {
     // hacer una excepción, puesto que si el usuario es normal o admin, se
     // necesitan parámetros de Person, pero si es empresa, se necesitan parámetros
     // de Company
+    console.log('THIS IS THE REQ.BODY', req.body);
+    
 
     let type = req.body.roleType;
 
@@ -30,6 +32,12 @@ function validateParams(paramsSpec, registerUser = false) {
         delete paramsSpec.companyRut;
         delete paramsSpec.recoveryEmail;
       } else if (type === 'company') {
+        // excluir campos específicos de Person
+        delete paramsSpec.fullName;
+        delete paramsSpec.location;
+        delete paramsSpec.phoneNumber;
+        delete paramsSpec.personalEmail;
+      } else if (type === 'distributor') {
         // excluir campos específicos de Person
         delete paramsSpec.fullName;
         delete paramsSpec.location;

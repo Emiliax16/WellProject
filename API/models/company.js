@@ -16,6 +16,8 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       company.belongsTo(models.user, { foreignKey: 'userId', onDelete: 'CASCADE' });
       company.hasMany(models.client, { foreignKey: 'companyId', onDelete: 'CASCADE' });
+      company.belongsTo(models.distributor, { foreignKey: 'distributorId', onDelete: 'CASCADE' });
+
     }
   }
   company.init({
@@ -50,7 +52,16 @@ module.exports = (sequelize, DataTypes) => {
     location: {
       type: DataTypes.STRING,
       allowNull: true,
-    }
+    },
+    distributorId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'distributors',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+    },
   }, {
     sequelize,
     modelName: 'company',

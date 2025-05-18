@@ -52,12 +52,20 @@ const registerParams = {
   },
   companyRut: {
     type: 'string',
-    required: true,
+    required: false,
   },
   recoveryEmail: {
     type: 'string',
     required: false,
-  }
+  },
+  distributorLogo: {
+    type: 'string',
+    required: false,
+  },
+  distributorRut: {
+    type: 'string',
+    required: false,
+  },
 }
 
 module.exports = {

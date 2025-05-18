@@ -23,6 +23,7 @@ module.exports = (sequelize, DataTypes) => {
       user.belongsTo(models.role, { foreignKey: 'roleId' });
       user.hasOne(models.client, { foreignKey: 'userId', onDelete: 'CASCADE' });
       user.hasOne(models.company, { foreignKey: 'userId', onDelete: 'CASCADE' });
+      user.hasOne(models.distributor, { foreignKey: 'userId', onDelete: 'CASCADE' });
     }
   }
   user.init({
@@ -136,6 +137,12 @@ module.exports = (sequelize, DataTypes) => {
     companyParams.userId = this.id;
     const company = await Company.create(companyParams);
     return company;
+  }
+
+  user.prototype.createDistributor = async function (distributorParams, Distributor) {
+    distributorParams.userId = this.id;
+    const distributor = await Distributor.create(distributorParams);
+    return distributor;
   }
 
   return user;
