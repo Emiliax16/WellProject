@@ -166,12 +166,16 @@ const deleteCompany = async (req, res, next) => {
       throw new ErrorHandler(companyNotFound)
     }
 
+    // TODO: negociar si se eliminan en cadena, por el momento no
     // const clients = await company.getClients()
     // clients.forEach(async client => {
     //     await client.update({ companyId: null })
     // })
 
-    await company.destroy()
+    const user = await company.getUser();
+    await company.destroy();
+    await user.destroy();
+
     res.json({ message: `La compañia ${id} fue eliminada` })
   } catch (error) {
     next(error)
