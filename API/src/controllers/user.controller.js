@@ -192,7 +192,6 @@ const registerUser = async (req, res, next) => {
         location: req.body.location,
         userId: user.id,
       };
-      console.log('llego vivo aqui');
       
       await Distributor.create(personalParams, { transaction });
       console.log('se creo el distributor');
