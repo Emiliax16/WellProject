@@ -162,7 +162,11 @@ const deleteDistributor = async (req, res, next) => {
       throw new ErrorHandler(distributorNotFound);
     }
 
+    const user = await distributor.getUser();
+
     await distributor.destroy();
+    await user.destroy();
+
     res.json({ message: `La distribuidora ${id} fue eliminada` });
   } catch (error) {
     next(error);

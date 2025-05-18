@@ -192,7 +192,6 @@ const registerUser = async (req, res, next) => {
         location: req.body.location,
         userId: user.id,
       };
-      console.log('llego vivo aqui');
       
       await Distributor.create(personalParams, { transaction });
       console.log('se creo el distributor');
@@ -254,7 +253,7 @@ const getUserRoleById = async (req, res, next) => {
 
     res.status(200).json(role);
   } catch (error) {
-    throw new ErrorHandler(userNotFound);
+    next(error);
   }
 };
 
