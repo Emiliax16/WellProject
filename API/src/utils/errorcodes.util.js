@@ -101,6 +101,21 @@ const couldntPostToDga = {
     "No se pudo enviar los datos a la DGA. Por favor revisa bien los parámetros que estás enviando",
 };
 
+const distributorNotFound = {
+  code: 404,
+  message: "Distribuidora no encontrada",
+};
+
+const companyDoesntBelongToDistributor = {
+  code: 400,
+  message: "La compañia no pertenece a esta distribuidora",
+};
+
+const distributorHasNoUserOrPersonAssociated = {
+  code: 404,
+  message: "La distribuidora no tiene un usuario o persona asociada",
+};
+
 module.exports = {
   userNotFound,
   missingParams,
@@ -122,4 +137,7 @@ module.exports = {
   wellDataDatesAreInvalid,
   bulkCreateWellDataIsNotArray,
   couldntPostToDga,
+  distributorNotFound,
+  companyDoesntBelongToDistributor,
+  distributorHasNoUserOrPersonAssociated,
 };

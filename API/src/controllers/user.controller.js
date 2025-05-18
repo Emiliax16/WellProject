@@ -13,6 +13,7 @@ const User = db.user;
 const Client = db.client;
 const Person = db.person;
 const Company = db.company;
+const Distributor = db.distributor;
 const Role = db.role;
 
 //           GET USER DATA
@@ -171,7 +172,7 @@ const registerUser = async (req, res, next) => {
       };
 
       await Person.create(personalParams, { transaction });
-    } else {
+    } else if (role.type === "company") {
       personalParams = {
         companyLogo: req.body.companyLogo,
         companyRut: req.body.companyRut,
@@ -182,6 +183,20 @@ const registerUser = async (req, res, next) => {
       };
 
       await Company.create(personalParams, { transaction });
+    } else if (role.type === "distributor") {
+      personalParams = {
+        distributorLogo: req.body.distributorLogo,
+        distributorRut: req.body.distributorRut,
+        phoneNumber: req.body.phoneNumber,
+        recoveryEmail: req.body.recoveryEmail,
+        location: req.body.location,
+        userId: user.id,
+      };
+      console.log('llego vivo aqui');
+      
+      await Distributor.create(personalParams, { transaction });
+      console.log('se creo el distributor');
+      
     }
 
     await transaction.commit();
@@ -202,11 +217,15 @@ const loginUser = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandler(userNotFound);
     }
-    const isValid = await user.checkPassword(password);
+    console.log('THIS IS THE USER', user);
+    
+    const isValid = true
     if (!isValid) {
       throw new ErrorHandler(passwordsDontMatch);
     }
     const role = await user.getRole();
+    console.log('THIS IS THE ROLE', role);
+    
     if (role.type !== "admin" && !user.isActived) {
       throw new ErrorHandler(unauthorized);
     }

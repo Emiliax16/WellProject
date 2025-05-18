@@ -23,7 +23,7 @@ module.exports = (sequelize, DataTypes) => {
         msg: 'Role already exists'
       },
       validate: {
-        isIn: [['admin', 'normal', 'company']],
+        isIn: [['admin', 'normal', 'company', 'distributor']],
       }
     },
     description: {
