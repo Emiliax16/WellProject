@@ -9,14 +9,19 @@ const {
     deleteCompany,
     editCompany
 } = require('../controllers/company.controller');
+const {
+  AdminAndCompany,
+  Admin,
+  AdminAndCompanyAndDistributor
+} = require('../utils/allowed-roles.util');
 const router = express.Router();
 
-router.get('/companies', authMiddleware('admin'), getAllCompanies);
-router.get('/companies/:id', authMiddleware('admin', 'company'), getCompanyInfo);
-router.get('/companies/:id/clients', authMiddleware('admin', 'company'), getAllCompanyClients);
-router.post('/companies/:id/clients/:clientId', authMiddleware('admin', 'company'), addClientToCompany);
-router.delete('/companies/:id/clients/:clientId', authMiddleware('admin', 'company'), removeClientFromCompany);
-router.delete('/companies/:id/delete', authMiddleware('admin'), deleteCompany);
-router.put('/companies/:id/edit', authMiddleware('admin'), editCompany);
+router.get('/companies', authMiddleware(...AdminAndCompanyAndDistributor), getAllCompanies);
+router.get('/companies/:id', authMiddleware(...AdminAndCompanyAndDistributor), getCompanyInfo);
+router.get('/companies/:id/clients', authMiddleware(...AdminAndCompany), getAllCompanyClients);
+router.post('/companies/:id/clients/:clientId', authMiddleware(...AdminAndCompany), addClientToCompany);
+router.delete('/companies/:id/clients/:clientId', authMiddleware(...AdminAndCompany), removeClientFromCompany);
+router.delete('/companies/:id/delete', authMiddleware(...Admin), deleteCompany);
+router.put('/companies/:id/edit', authMiddleware(...AdminAndCompanyAndDistributor), editCompany);
 
 module.exports = router;
