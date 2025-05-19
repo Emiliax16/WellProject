@@ -8,6 +8,7 @@ const {
 } = require("../utils/errorcodes.util");
 const checkPermissionsForClientResources = require("../utils/check-permissions");
 const company = require("../../models/company");
+const distributor = require("../../models/distributor");
 const { sequelize } = db;
 const User = db.user;
 const Client = db.client;
@@ -59,6 +60,15 @@ const getUserInfo = async (req, res, next) => {
         },
       });
       return res.json(userWithCompany);
+    } else if (userRoleType === "distributor") {
+      const userWithDistributor = await User.findByPk(id, {
+        attributes: { exclude: ["encrypted_password"] },
+        include: {
+          model: Distributor,
+          as: "distributor",
+        },
+      });
+      return res.json(userWithDistributor);
     } else {
       const userWithClient = await User.findByPk(id, {
         attributes: { exclude: ["encrypted_password"] },
@@ -180,6 +190,7 @@ const registerUser = async (req, res, next) => {
         recoveryEmail: req.body.recoveryEmail,
         location: req.body.location,
         userId: user.id,
+        distributorId: req.body?.distributorId
       };
 
       await Company.create(personalParams, { transaction });
@@ -193,9 +204,7 @@ const registerUser = async (req, res, next) => {
         userId: user.id,
       };
       
-      await Distributor.create(personalParams, { transaction });
-      console.log('se creo el distributor');
-      
+      await Distributor.create(personalParams, { transaction });      
     }
 
     await transaction.commit();
