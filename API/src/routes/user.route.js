@@ -15,17 +15,18 @@ const {
   AdminAndCompanyAndNormal,
   AdminAndCompany,
   Admin,
-  AdminAndCompanyAndDistributor
+  AdminAndCompanyAndDistributor,
+  AllRoles
 } = require('../utils/allowed-roles.util');
 console.log(...AdminAndCompany);
 const router = express.Router();
 
 router.get('/users', getUsers);
-router.get('/users/data', authMiddleware(...AdminAndCompanyAndNormal), getUserInfo);
-router.get('/users/data/:id', authMiddleware(...AdminAndCompanyAndNormal), getUserInfoById);
+router.get('/users/data', authMiddleware(...AllRoles), getUserInfo);
+router.get('/users/data/:id', authMiddleware(...AllRoles), getUserInfoById);
 router.post('/users/register',  authMiddleware(...AdminAndCompanyAndDistributor), validateParams(registerParams, true), registerUser);
 router.post('/users/login', validateParams(loginParams), loginUser);
-router.get('/users/role/:id', authMiddleware(...AdminAndCompanyAndNormal), getUserRoleById);
-router.get('/users/roles', authMiddleware(...AdminAndCompany), getAllUserRoles);
+router.get('/users/role/:id', authMiddleware(...AllRoles), getUserRoleById);
+router.get('/users/roles', authMiddleware(...AdminAndCompanyAndDistributor), getAllUserRoles);
 
 module.exports = router;
