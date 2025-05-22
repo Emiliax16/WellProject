@@ -141,7 +141,7 @@ const registerUser = async (req, res, next) => {
     if (!checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
     }
-    
+
     const userParams = {
       name: req.body.name,
       email: req.body.email,
@@ -170,7 +170,7 @@ const registerUser = async (req, res, next) => {
 
       await Client.create(clientParams, { transaction });
     }
-    
+
     let personalParams = {};
     if (role.type === "normal" || role.type === "admin") {
       personalParams = {
@@ -190,7 +190,7 @@ const registerUser = async (req, res, next) => {
         recoveryEmail: req.body.recoveryEmail,
         location: req.body.location,
         userId: user.id,
-        distributorId: req.body?.distributorId
+        distributorId: req.body?.distributorId,
       };
 
       await Company.create(personalParams, { transaction });
@@ -203,8 +203,8 @@ const registerUser = async (req, res, next) => {
         location: req.body.location,
         userId: user.id,
       };
-      
-      await Distributor.create(personalParams, { transaction });      
+
+      await Distributor.create(personalParams, { transaction });
     }
 
     await transaction.commit();
@@ -225,15 +225,11 @@ const loginUser = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandler(userNotFound);
     }
-    console.log('THIS IS THE USER', user);
-    
-    const isValid = true
+    const isValid = await user.checkPassword(password);
     if (!isValid) {
       throw new ErrorHandler(passwordsDontMatch);
     }
     const role = await user.getRole();
-    console.log('THIS IS THE ROLE', role);
-    
     if (role.type !== "admin" && !user.isActived) {
       throw new ErrorHandler(unauthorized);
     }

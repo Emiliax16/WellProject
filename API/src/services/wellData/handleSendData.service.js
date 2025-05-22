@@ -23,8 +23,15 @@ const fixNumberFormat = (number) => {
  */
 const processAndPostData = async (wellData, well) => {
   try {
-    const data = {...wellData, ...well}
+    console.log("this is the wellData", wellData);
+    console.log("this is the well", well);
+    console.log("@@@@@-------------------------------------");
+
+    const data = { ...well.toJSON(), ...wellData.toJSON() };
+    console.log("Data to be sent:", data);
     const formatedData = await formaDataV2(data);
+    console.log("-----------------------------------");
+    console.log("Formatted data:", formatedData);
     const response = await postToDgaV2(formatedData, wellData.code);
     console.log("Response from DGA:", response.data);
     if (!checkValidResponseV2(response))
@@ -50,6 +57,7 @@ const processAndPostData = async (wellData, well) => {
  * @returns {Object} - Retorna un objeto JSON formateado listo para ser enviado a la DGA.
  */
 const formaDataV2 = async (data) => {
+  console.log("this is the data", data);
   return {
     autenticacion: {
       rutEmpresa: data.rutEmpresa,
