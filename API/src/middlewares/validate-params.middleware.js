@@ -58,27 +58,31 @@ function validateParams(paramsSpec, registerUser = false) {
         params.push({ key, value: paramValue });
       }
     }
-
-    if (errors.length > 0) {
-      const missingParametersMessage = `Faltan parámetro(s) requerido(s): ${errors.join(', ')}`;
-      throw new ErrorHandler({
-        message: missingParametersMessage,
-        code: 400,
-      });
+    try {
+      if (errors.length > 0) {
+        const missingParametersMessage = `Faltan parámetro(s) requerido(s): ${errors.join(', ')}`;
+        throw new ErrorHandler({
+          message: missingParametersMessage,
+          code: 400,
+        });
+      }
+      if (forbidden.length > 0) {
+        const forbiddenParametersMessage = `Parámetro(s) prohibido(s) enviado(s): ${forbidden.join(', ')}`;
+        throw new ErrorHandler({
+          message: forbiddenParametersMessage,
+          code: 400,
+        });
+      }
+      if (params.length === 0) {
+        throw new ErrorHandler({
+          message: 'No se enviaron parámetros validos. Porfavor envie al menos uno',
+          code: 400,
+        });
+      }
+    } catch (error) {
+        next(error)
     }
-    if (forbidden.length > 0) {
-      const forbiddenParametersMessage = `Parámetro(s) prohibido(s) enviado(s): ${forbidden.join(', ')}`;
-      throw new ErrorHandler({
-        message: forbiddenParametersMessage,
-        code: 400,
-      });
-    }
-    if (params.length === 0) {
-      throw new ErrorHandler({
-        message: 'No se enviaron parámetros validos. Porfavor envie al menos uno',
-        code: 400,
-      });
-    }
+    
 
     next();
 
