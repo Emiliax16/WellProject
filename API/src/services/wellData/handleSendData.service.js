@@ -18,19 +18,26 @@ const fixNumberFormat = (number) => {
   return fixedNumber;
 };
 
+const parseRUT = (rut) => {
+  const cleanRut = rut.replace(/[.\-]/g, '').toUpperCase();
+
+  if (cleanRut.length < 2) return null;
+
+  const body = cleanRut.slice(0, -1);
+  const dv = cleanRut.slice(-1);
+
+  return `${body}-${dv}`;
+};
+
+
 /**
  * @description Procesa los datos de un pozo y los envía a la DGA
  */
 const processAndPostData = async (wellData, well) => {
   try {
-    console.log("this is the wellData", wellData);
-    console.log("this is the well", well);
-    console.log("@@@@@-------------------------------------");
-
     const data = { ...well.toJSON(), ...wellData.toJSON() };
     console.log("Data to be sent:", data);
     const formatedData = await formaDataV2(data);
-    console.log("-----------------------------------");
     console.log("Formatted data:", formatedData);
     const response = await postToDgaV2(formatedData, wellData.code);
     console.log("Response from DGA:", response.data);
@@ -60,9 +67,9 @@ const formaDataV2 = async (data) => {
   console.log("this is the data", data);
   return {
     autenticacion: {
-      rutEmpresa: data.rutEmpresa,
+      rutEmpresa: parseRUT(data.rutEmpresa),
       password: data.password,
-      rutUsuario: data.rutUsuario,
+      rutUsuario: parseRUT(data.rutUsuario),
     },
     medicionSubterranea: {
       caudal: data.caudal.toString(),
