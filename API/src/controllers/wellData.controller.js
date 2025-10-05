@@ -54,26 +54,66 @@ const bulkCreateWellData = async (req, res, next) => {
 
     const errors = [];
     const validReports = [];
+
+    // 1) Pozos en una sola query
+    const uniqueCodes = [...new Set(rawData.map(i => i.code))];
+    const wells = await Well.findAll({
+      where: { code: { [db.Op.in]: uniqueCodes } }
+    });
+    const wellsMap = new Map(wells.map(w => [w.code, w]));
+
+    // 2) Existing en una o más queries (chunk opcional)
+    const chunkSize = 500; // ajusta si lo necesitas
+    const makeKey = (i) => `${i.code}-${i.date}-${i.hour}`;
+
+    const allKeys = rawData.map(makeKey);
+    const existingSet = new Set();
+
+    for (let i = 0; i < rawData.length; i += chunkSize) {
+      const slice = rawData.slice(i, i + chunkSize);
+      const existing = await WellData.findAll({
+        where: {
+          [db.Op.or]: slice.map(item => ({
+            date: item.date,
+            hour: item.hour,
+            code: item.code
+          }))
+        }
+      });
+      for (const row of existing) {
+        existingSet.add(`${row.code}-${row.date}-${row.hour}`);
+      }
+    }
+
+    // 3) Validación por item (manteniendo mensajes)
+    const seen = new Set(); // para duplicados en la MISMA petición
     for (const wellData of rawData) {
       console.log(`This is the wellData: ${JSON.stringify(wellData)}`);
-
       const { code, date, hour } = wellData;
-      const well = await Well.findOne({ where: { code } });
-      if (!well) {
+
+      // pozo existe
+      if (!wellsMap.get(code)) {
         errors.push({
           message: "Code no pertenece a ningún pozo registrado",
           report: wellData,
         });
         continue;
       }
-      const existingWellData = await WellData.findOne({
-        where: {
-          date,
-          hour,
-          code,
-        },
-      });
-      if (existingWellData) {
+
+      const key = `${code}-${date}-${hour}`;
+
+      // duplicado dentro del mismo batch (preserva comportamiento original)
+      if (seen.has(key)) {
+        errors.push({
+          message: "Ya existe un reporte para esa fecha y hora",
+          report: wellData,
+        });
+        continue;
+      }
+      seen.add(key);
+
+      // ya existía en DB
+      if (existingSet.has(key)) {
         errors.push({
           message: "Ya existe un reporte para esa fecha y hora",
           report: wellData,
@@ -82,7 +122,10 @@ const bulkCreateWellData = async (req, res, next) => {
       }
 
       validReports.push(wellData);
-      await WellData.create(wellData);
+    }
+
+    if (validReports.length > 0) {
+      await WellData.bulkCreate(validReports);
     }
 
     if (validReports.length === 0) {
@@ -100,6 +143,7 @@ const bulkCreateWellData = async (req, res, next) => {
     next(error);
   }
 };
+
 
 const repostAllReportsToDGA = async (req, res, next) => {
   try {
