@@ -84,6 +84,7 @@ const processAndPostData = async (wellData, well) => {
       sent: true,
       sentDate: new moment().tz("America/Santiago").format(),
     });
+    return true;
   } catch (error) {
     throw error;
   }
