@@ -29,6 +29,43 @@ const parseRUT = (rut) => {
   return `${body}-${dv}`;
 };
 
+/**
+ * Normaliza el formato de hora para asegurar que tenga el formato HH:mm:ss
+ * Si la hora viene como HH:mm, agrega :00 al final
+ * @param {string} hour - Hora en formato HH:mm o HH:mm:ss
+ * @returns {string} - Hora en formato HH:mm:ss
+ */
+const normalizeHourFormat = (hour) => {
+  if (!hour || typeof hour !== 'string') {
+    console.warn(`Hora inválida o no es string: ${hour}. Se enviará el valor original.`);
+    return hour;
+  }
+  
+  // Si ya tiene el formato HH:mm:ss, retornarla tal cual
+  if (hour.match(/^\d{2}:\d{2}:\d{2}$/)) {
+    return hour;
+  }
+  
+  // Si tiene formato HH:mm, agregar :00
+  if (hour.match(/^\d{2}:\d{2}$/)) {
+    return `${hour}:00`;
+  }
+  
+  // Si tiene formato H:mm (sin cero inicial), agregar cero y segundos
+  if (hour.match(/^\d{1}:\d{2}$/)) {
+    return `0${hour}:00`;
+  }
+  
+  // Si tiene formato H:mm:ss (sin cero inicial), agregar cero
+  if (hour.match(/^\d{1}:\d{2}:\d{2}$/)) {
+    return `0${hour}`;
+  }
+  
+  // Si no coincide con ningún formato, retornar la hora original para que salte el error
+  console.warn(`Formato de hora no reconocido: ${hour}. Se enviará el valor original.`);
+  return hour;
+};
+
 
 /**
  * @description Procesa los datos de un pozo y los envía a la DGA
@@ -65,6 +102,7 @@ const processAndPostData = async (wellData, well) => {
  */
 const formaDataV2 = async (data) => {
   console.log("this is the data", data);
+  const fecha = data.realDate || data.date;
   return {
     autenticacion: {
       rutEmpresa: parseRUT(data.rutEmpresa),
@@ -73,8 +111,8 @@ const formaDataV2 = async (data) => {
     },
     medicionSubterranea: {
       caudal: data.caudal.toString(),
-      fechaMedicion: moment(data.date, "DD/MM/YYYY").format("YYYY-MM-DD"),
-      horaMedicion: data.hour,
+      fechaMedicion: moment(data.date,  ["YYYY-MM-DD", "DD/MM/YYYY", "DD-MM-YYYY"], true).format("YYYY-MM-DD"),
+      horaMedicion: normalizeHourFormat(data.hour),
       nivelFreaticoDelPozo: fixNumberFormat(data.nivel_freatico.toString()),
       totalizador: fixNumberFormat(data.totalizador.toString()),
     },
