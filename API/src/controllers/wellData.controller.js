@@ -8,6 +8,34 @@ const ErrorHandler = require("../utils/error.util");
 const moment = require("moment-timezone");
 const { bulkCreateWellDataIsNotArray } = require("../utils/errorcodes.util");
 
+/**
+ * Normaliza un valor numérico que puede venir con coma como separador decimal
+ * Convierte "2,00" a 2.00 (número)
+ * @param {string|number} value - Valor a normalizar
+ * @returns {number} Valor numérico con punto decimal
+ */
+const normalizeDecimalValue = (value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    // Reemplazar coma por punto y convertir a número
+    return parseFloat(value.replace(',', '.'));
+  }
+  return value;
+};
+
+/**
+ * Normaliza los campos numéricos de un reporte (caudal y nivel_freatico)
+ * @param {Object} reportData - Datos del reporte
+ * @returns {Object} Reporte con valores normalizados
+ */
+const normalizeReportNumericFields = (reportData) => {
+  return {
+    ...reportData,
+    caudal: normalizeDecimalValue(reportData.caudal),
+    nivel_freatico: normalizeDecimalValue(reportData.nivel_freatico)
+  };
+};
+
 const createWellData = async (req, res) => {
   try {
     console.log(req.body);
@@ -34,7 +62,9 @@ const createWellData = async (req, res) => {
       });
     }
 
-    const wellData = await WellData.create(req.body);
+    // Normalizar valores numéricos (coma a punto)
+    const normalizedData = normalizeReportNumericFields(req.body);
+    const wellData = await WellData.create(normalizedData);
     res.json(wellData);
   } catch (error) {
     res.status(500).send({
@@ -89,7 +119,10 @@ const bulkCreateWellData = async (req, res, next) => {
     const seen = new Set(); // para duplicados en la MISMA petición
     for (const wellData of rawData) {
       console.log(`This is the wellData: ${JSON.stringify(wellData)}`);
-      const { code, date, hour } = wellData;
+      
+      // Normalizar valores numéricos (coma a punto)
+      const normalizedWellData = normalizeReportNumericFields(wellData);
+      const { code, date, hour } = normalizedWellData;
 
       // pozo existe
       if (!wellsMap.get(code)) {
@@ -121,7 +154,7 @@ const bulkCreateWellData = async (req, res, next) => {
         continue;
       }
 
-      validReports.push(wellData);
+      validReports.push(normalizedWellData);
     }
 
     if (validReports.length > 0) {
