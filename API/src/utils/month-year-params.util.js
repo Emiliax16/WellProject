@@ -23,8 +23,11 @@ const defineDateCondition = (query) => {
     yearInt >= 2023 &&
     yearInt <= new Date().getFullYear()
   ) {
+    // Primer día del mes
     const startDate = new Date(yearInt, monthInt - 1, 1);
-    const endDate = new Date(yearInt, monthInt, 1);
+    
+    // Último día del mes (día 0 del mes siguiente = último día del mes actual)
+    const endDate = new Date(yearInt, monthInt, 0);
 
     return { startDate, endDate };
   } else {
