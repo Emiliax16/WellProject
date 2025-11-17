@@ -24,7 +24,33 @@ const normalizeDecimalValue = (value) => {
 };
 
 /**
+ * Parsea una fecha del formato DD/MM/YYYY a un objeto Date
+ * @param {string} dateStr - Fecha en formato DD/MM/YYYY
+ * @returns {Date|null} Objeto Date o null si el formato es inválido
+ */
+const parseDateString = (dateStr) => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  
+  // Formato DD/MM/YYYY
+  const ddmmyyyyMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    return new Date(year, month - 1, day);
+  }
+  
+  // Formato ISO YYYY-MM-DD
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return new Date(year, month - 1, day);
+  }
+  
+  return null;
+};
+
+/**
  * Normaliza los campos numéricos de un reporte (caudal y nivel_freatico)
+ * y rellena automáticamente el campo realDate desde date
  * @param {Object} reportData - Datos del reporte
  * @returns {Object} Reporte con valores normalizados
  */
@@ -32,7 +58,8 @@ const normalizeReportNumericFields = (reportData) => {
   return {
     ...reportData,
     caudal: normalizeDecimalValue(reportData.caudal),
-    nivel_freatico: normalizeDecimalValue(reportData.nivel_freatico)
+    nivel_freatico: normalizeDecimalValue(reportData.nivel_freatico),
+    realDate: parseDateString(reportData.date)
   };
 };
 
