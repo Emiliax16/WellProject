@@ -253,13 +253,13 @@ const getWellData = async (req, res, next) => {
 
     const wellData = await WellData.findAndCountAll({
       where: { code: well.code,
-        createdAt: {
+        realDate: {
           [db.Op.between]: [startDate, endDate]
        },
       },
       limit,
       offset,
-      order: [['createdAt', 'DESC']],
+      order: [['realDate', 'DESC'], ['hour', 'DESC']],
     });
     res.json(wellData);
   
