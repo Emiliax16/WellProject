@@ -29,6 +29,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         type: DataTypes.STRING,
       },
+      realDate: {
+        allowNull: true,
+        type: DataTypes.DATEONLY,
+        comment: 'Fecha en formato DATE para filtros y consultas. Se rellena automáticamente desde el campo date (string)',
+      },
       hour: {
         allowNull: false,
         type: DataTypes.STRING,
