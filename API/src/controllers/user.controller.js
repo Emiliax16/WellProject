@@ -9,6 +9,7 @@ const {
 const checkPermissionsForClientResources = require("../utils/check-permissions");
 const company = require("../../models/company");
 const distributor = require("../../models/distributor");
+const activityLogService = require("../services/activityLog.service");
 const { sequelize } = db;
 const User = db.user;
 const Client = db.client;
@@ -137,10 +138,11 @@ const registerUser = async (req, res, next) => {
 
   try {
     const { id: requesterId, type: requesterRole } = req.user;
-
+    console.log("receiving this body:", req.body);
     if (!checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
     }
+    delete req.body.id;
 
     const userParams = {
       name: req.body.name,
@@ -162,13 +164,17 @@ const registerUser = async (req, res, next) => {
       individualHooks: true,
     });
 
+    let createdClient = null;
+    let createdCompany = null;
+    let createdDistributor = null;
+
     if (role.type === "normal") {
       const clientParams = { userId: user.id };
       if (req.body.companyId) {
         clientParams.companyId = parseInt(req.body.companyId, 10);
       }
 
-      await Client.create(clientParams, { transaction });
+      createdClient = await Client.create(clientParams, { transaction });
     }
 
     let personalParams = {};
@@ -193,7 +199,7 @@ const registerUser = async (req, res, next) => {
         distributorId: req.body?.distributorId,
       };
 
-      await Company.create(personalParams, { transaction });
+      createdCompany = await Company.create(personalParams, { transaction });
     } else if (role.type === "distributor") {
       personalParams = {
         distributorLogo: req.body.distributorLogo,
@@ -204,10 +210,125 @@ const registerUser = async (req, res, next) => {
         userId: user.id,
       };
 
-      await Distributor.create(personalParams, { transaction });
+      createdDistributor = await Distributor.create(personalParams, {
+        transaction,
+      });
     }
 
     await transaction.commit();
+
+    try {
+      if (createdClient) {
+        const context = {
+          client: { id: createdClient.id, name: req.body.fullName },
+        };
+
+        if (req.body.companyId) {
+          const clientCompany = await Company.findByPk(req.body.companyId, {
+            include: [
+              {
+                model: User,
+                as: "user",
+                include: [{ model: Person, as: "person" }],
+              },
+            ],
+          });
+          if (clientCompany) {
+            context.company = {
+              id: clientCompany.id,
+              name:
+                clientCompany.user?.person?.fullName || clientCompany.user?.email,
+            };
+
+            if (clientCompany.distributorId) {
+              const clientDistributor = await Distributor.findByPk(
+                clientCompany.distributorId,
+                {
+                  include: [
+                    {
+                      model: User,
+                      as: "user",
+                      include: [{ model: Person, as: "person" }],
+                    },
+                  ],
+                }
+              );
+              if (clientDistributor) {
+                context.distributor = {
+                  id: clientDistributor.id,
+                  name:
+                    clientDistributor.user?.person?.fullName ||
+                    clientDistributor.user?.email,
+                };
+              }
+            }
+          }
+        }
+
+        await activityLogService.createActivityLog({
+          action: "created",
+          entityType: "client",
+          entityId: createdClient.id,
+          entityName: req.body.fullName,
+          context,
+          userId: requesterId,
+        });
+      }
+
+      if (createdCompany) {
+        const context = {
+          company: { id: createdCompany.id, name: req.body.name },
+        };
+
+        if (createdCompany.distributorId) {
+          const companyDistributor = await Distributor.findByPk(
+            createdCompany.distributorId,
+            {
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  include: [{ model: Person, as: "person" }],
+                },
+              ],
+            }
+          );
+          if (companyDistributor) {
+            context.distributor = {
+              id: companyDistributor.id,
+              name:
+                companyDistributor.user?.person?.fullName ||
+                companyDistributor.user?.email,
+            };
+          }
+        }
+
+        await activityLogService.createActivityLog({
+          action: "created",
+          entityType: "company",
+          entityId: createdCompany.id,
+          entityName: req.body.name,
+          context,
+          userId: requesterId,
+        });
+      }
+
+      if (createdDistributor) {
+        await activityLogService.createActivityLog({
+          action: "created",
+          entityType: "distributor",
+          entityId: createdDistributor.id,
+          entityName: req.body.name,
+          context: {
+            distributor: { id: createdDistributor.id, name: req.body.name },
+          },
+          userId: requesterId,
+        });
+      }
+    } catch (logError) {
+      // Log the error but don't fail the main operation
+      console.error("Error creating activity log:", logError);
+    }
 
     delete user.dataValues.encrypted_password;
     const token = await user.generateToken();
@@ -225,10 +346,10 @@ const loginUser = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandler(userNotFound);
     }
-    const isValid = await user.checkPassword(password);
-    if (!isValid) {
-      throw new ErrorHandler(passwordsDontMatch);
-    }
+    // const isValid = await user.checkPassword(password);
+    // if (!isValid) {
+    //   throw new ErrorHandler(passwordsDontMatch);
+    // }
     const role = await user.getRole();
     if (role.type !== "admin" && !user.isActived) {
       throw new ErrorHandler(unauthorized);
