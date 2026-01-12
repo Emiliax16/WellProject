@@ -154,6 +154,7 @@ const registerUser = async (req, res, next) => {
     };
 
     const role = await Role.findByPk(userParams.roleId, { transaction });
+    console.log("\n\nUSER Y ROLE!!!!!!\n\n:", userParams, role, req.body);
 
     if (!role) {
       throw new ErrorHandler(userNotFound);

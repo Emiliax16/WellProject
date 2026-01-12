@@ -341,10 +341,44 @@ const fetchUnsentReports = async (req, res, next) => {
   }
 };
 
+const bulkDeleteWellData = async (req, res, next) => {
+  try {
+    const { reportIds } = req.body;
+
+    if (!reportIds || !Array.isArray(reportIds) || reportIds.length === 0) {
+      return res.status(400).send({
+        message: "Debe proporcionar un array de IDs de reportes para eliminar.",
+      });
+    }
+
+    const deletedCount = await WellData.destroy({
+      where: {
+        id: {
+          [db.Op.in]: reportIds,
+        },
+      },
+    });
+
+    if (deletedCount === 0) {
+      return res.status(404).send({
+        message: "No se encontraron reportes con los IDs proporcionados.",
+      });
+    }
+
+    res.status(200).send({
+      message: `${deletedCount} reporte(s) eliminado(s) exitosamente.`,
+      deletedCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createWellData,
   fetchUnsentReports,
   repostToDGA,
   repostAllReportsToDGA,
   bulkCreateWellData,
+  bulkDeleteWellData,
 };
