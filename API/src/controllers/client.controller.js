@@ -1,9 +1,9 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
-const { 
-  unauthorized, 
-  userHasNoClientAssociated, 
+const {
+  unauthorized,
+  userHasNoClientAssociated,
   clientNotFound,
   wellNotFound,
   clientHasNoUserOrPersonAssociated,
@@ -11,12 +11,15 @@ const {
 } = require('../utils/errorcodes.util');
 const getPaginationParameters = require('../utils/query-params.util');
 const defineDateCondition = require('../utils/month-year-params.util');
+const activityLogService = require('../services/activityLog.service');
 
 const Client = db.client;
 const Well = db.well;
 const WellData = db.wellData;
 const User = db.user;
 const Person = db.person;
+const Company = db.company;
+const Distributor = db.distributor;
 
 
 //               GET ALL CLIENTS
@@ -165,7 +168,37 @@ const editClientWell = async (req, res, next) => {
   try {
     const { id: clientId, code } = req.params;
 
-    const client = await Client.findByPk(clientId);
+    const client = await Client.findByPk(clientId, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          include: [{ model: Person, as: 'person' }]
+        },
+        {
+          model: Company,
+          as: 'company',
+          include: [
+            {
+              model: User,
+              as: 'user',
+              include: [{ model: Person, as: 'person' }]
+            },
+            {
+              model: Distributor,
+              as: 'distributor',
+              include: [
+                {
+                  model: User,
+                  as: 'user',
+                  include: [{ model: Person, as: 'person' }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
     if (!client) {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
@@ -189,7 +222,50 @@ const editClientWell = async (req, res, next) => {
       }
     }
 
+    // Check if isActived changed for activity logging
+    const wasActive = well.isActived;
+    const willBeActive = req.body.isActived !== undefined ? req.body.isActived : wasActive;
+    const activationChanged = wasActive !== willBeActive;
+
     await well.update(req.body);
+
+    // Log activation/deactivation
+    if (activationChanged) {
+      try {
+        const context = {
+          client: {
+            id: client.id,
+            name: client.user?.person?.fullName || client.user?.email
+          }
+        };
+
+        if (client.company) {
+          context.company = {
+            id: client.company.id,
+            name: client.company.user?.person?.fullName || client.company.user?.email
+          };
+
+          if (client.company.distributor) {
+            context.distributor = {
+              id: client.company.distributor.id,
+              name: client.company.distributor.user?.person?.fullName || client.company.distributor.user?.email
+            };
+          }
+        }
+
+        await activityLogService.createActivityLog({
+          action: willBeActive ? 'activated' : 'deactivated',
+          entityType: 'well',
+          entityId: well.id,
+          entityName: well.code,
+          context,
+          userId: req.user.id
+        });
+      } catch (logError) {
+        console.error('Error creating activity log:', logError);
+      }
+    }
+
     return res.json({message: "Pozo editado exitosamente."});
   } catch (error) {
     next(error);
@@ -273,7 +349,37 @@ const getWellData = async (req, res, next) => {
 const createClientWell = async (req, res, next) => {
   try {
     const { id: clientId } = req.params;
-    const client = await Client.findByPk(clientId);
+    const client = await Client.findByPk(clientId, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          include: [{ model: Person, as: 'person' }]
+        },
+        {
+          model: Company,
+          as: 'company',
+          include: [
+            {
+              model: User,
+              as: 'user',
+              include: [{ model: Person, as: 'person' }]
+            },
+            {
+              model: Distributor,
+              as: 'distributor',
+              include: [
+                {
+                  model: User,
+                  as: 'user',
+                  include: [{ model: Person, as: 'person' }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
     if (!client) {
       throw new ErrorHandler(clientNotFound);
     }
@@ -283,6 +389,42 @@ const createClientWell = async (req, res, next) => {
     }
 
     const well = await Well.create({ ...req.body, clientId: client.id });
+
+    // Create activity log
+    try {
+      const context = {
+        client: {
+          id: client.id,
+          name: client.user?.person?.fullName || client.user?.email
+        }
+      };
+
+      if (client.company) {
+        context.company = {
+          id: client.company.id,
+          name: client.company.user?.person?.fullName || client.company.user?.email
+        };
+
+        if (client.company.distributor) {
+          context.distributor = {
+            id: client.company.distributor.id,
+            name: client.company.distributor.user?.person?.fullName || client.company.distributor.user?.email
+          };
+        }
+      }
+
+      await activityLogService.createActivityLog({
+        action: 'created',
+        entityType: 'well',
+        entityId: well.id,
+        entityName: well.code,
+        context,
+        userId: req.user.id
+      });
+    } catch (logError) {
+      console.error('Error creating activity log:', logError);
+    }
+
     res.json(well);
   } catch (error) {
     next(error);
