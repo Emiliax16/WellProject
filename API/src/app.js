@@ -36,6 +36,11 @@ app.use(activityLogRoute);
 // Ruta formulario de contacto
 app.use(contactRoute);
 
+// 404 explícito para cualquier ruta no registrada (debe ir antes del error handler)
+app.use((req, res) => {
+  return res.status(404).json({ error: 'Not found' });
+});
+
 // Middleware de manejo de errores
 app.use(errorHandler);
 
