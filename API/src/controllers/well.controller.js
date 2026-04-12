@@ -14,48 +14,44 @@ const User = db.user;
 const Person = db.person;
 
 //  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
-const getAllWells = async (req, res) => {
+const getAllWells = async (req, res, next) => {
   try {
     const wells = await Well.findAll();
-    res.json(wells);
+    return res.json(wells);
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while retrieving Wells'
-    });
+    return next(error);
   }
 }
 
-const createWell = async (req, res) => {
-  try { 
-    const well = await Well.create(req.body)
-    res.json({created: well})
-  } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while creating the Well'
-    });
-  }
-}
-
-const getWellDataByWell = async (req, res) => {
+const createWell = async (req, res, next) => {
   try {
-    const well = await Well.findOne({ where: { id: req.params.id } });
-    if (!well) {
-      res.status(404).send({
-        message: 'Well not found'
-      });
-    }
-    //console.log(well.__proto__) -> para conocer los métodos que se pueden usar
-    const wellDataInfo = await well.getWellData()
-    res.json(wellDataInfo)
+    const well = await Well.create(req.body)
+    return res.json({ created: well })
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while retrieving Well Data'
-    });
-  
+    return next(error);
   }
 }
 
-const activeOrDesactiveWell = async (req, res) => {
+const getWellDataByWell = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid well id' });
+    }
+
+    const well = await Well.findByPk(id);
+    if (!well) {
+      return res.status(404).json({ error: 'Well not found' });
+    }
+
+    const wellDataInfo = await well.getWellData();
+    return res.json(wellDataInfo);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+const activeOrDesactiveWell = async (req, res, next) => {
   try {
     // Get well with full context for activity logging
     const well = await Well.findOne({
@@ -153,11 +149,9 @@ const activeOrDesactiveWell = async (req, res) => {
       console.error('Error creating activity log:', logError);
     }
 
-    res.json(well);
+    return res.json(well);
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while activating the Well'
-    });
+    return next(error);
   }
 }
 

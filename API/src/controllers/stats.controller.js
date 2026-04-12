@@ -12,7 +12,7 @@ const Op = db.Op;
  * Get global statistics for the admin dashboard
  * Returns total counts and monthly trends for clients, companies, distributors, and wells
  */
-const getGlobalStats = async (req, res) => {
+const getGlobalStats = async (req, res, next) => {
   try {
     // Calculate date range for "this month"
     const now = new Date();
@@ -119,10 +119,7 @@ const getGlobalStats = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching global stats:", error);
-    return res.status(500).json({
-      message: "Error al obtener estadísticas globales",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
