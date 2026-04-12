@@ -10,6 +10,15 @@ dotenv.config();
 const URL_ENDPOINT_V2 =
   "https://apimee.mop.gob.cl/api/v1/mediciones/subterraneas";
 
+// Cliente HTTP dedicado a la DGA con timeout duro de 12s. Evita que un
+// servicio externo lento bloquee indefinidamente al backend (ver
+// timeout reportado por Layrz: "Client.Timeout exceeded while awaiting
+// headers" en POST /wellData).
+const DGA_TIMEOUT_MS = 12_000;
+const dgaClient = axios.create({
+  timeout: DGA_TIMEOUT_MS,
+});
+
 const fixNumberFormat = (number) => {
   if (typeof number !== "number") {
     return number;
@@ -131,7 +140,7 @@ const postToDgaV2 = async (formattedData, codigoObra) => {
     if (!formattedData || typeof formattedData !== "object" || !codigoObra) {
       throw new ErrorHandler(couldntPostToDga);
     }
-    const response = await axios.post(URL_ENDPOINT_V2, formattedData, {
+    const response = await dgaClient.post(URL_ENDPOINT_V2, formattedData, {
       headers: {
         "Content-Type": "application/json",
         codigoObra: codigoObra,
@@ -142,6 +151,13 @@ const postToDgaV2 = async (formattedData, codigoObra) => {
     });
     return response.data;
   } catch (error) {
+    if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+      console.error(
+        `Timeout (${DGA_TIMEOUT_MS}ms) enviando a DGA para ${codigoObra}: ${error.message}`
+      );
+      return { error: true, timeout: true, message: error.message };
+    }
+
     console.error("Error al enviar datos a la DGA:", error.message);
 
     if (error.response) {
