@@ -62,17 +62,29 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       hooks: {
-        afterCreate: async (wellData) => {
-          try {
-            // Sólo se pueden enviar reportes de pozos activos
-            const well = await wellData.getWell();
-
-            if (well.isActived) {
-              await processAndPostData(wellData, well);
+        // Fire-and-forget: NO retornamos la promesa al hook, así Sequelize
+        // no espera al envío a DGA antes de resolver `WellData.create()`.
+        // Si DGA falla o tarda, el reporte queda con `sent: false` y el
+        // SENDER lo reintenta en su próxima corrida. Esto desacopla el
+        // SLA del endpoint POST /wellData del SLA de la DGA y evita los
+        // timeouts del lado del cliente IoT (Layrz) que vimos en prod.
+        afterCreate: (wellData) => {
+          setImmediate(async () => {
+            try {
+              const well = await wellData.getWell();
+              if (well?.isActived) {
+                await processAndPostData(wellData, well);
+              }
+            } catch (error) {
+              console.error(JSON.stringify({
+                level: 'error',
+                msg: 'DGA dispatch failed in afterCreate hook',
+                wellDataId: wellData.id,
+                code: wellData.code,
+                error: error.message,
+              }));
             }
-          } catch (error) {
-            console.log(error);
-          }
+          });
         },
       },
       sequelize,
