@@ -2,6 +2,11 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 const db = require('../../models');
 
+const escapeHtml = (s) => {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(s ?? '').replace(/[&<>"']/g, (c) => map[c]);
+};
+
 const Well = db.well;
 const WellData = db.wellData;
 const Client = db.client;
@@ -162,9 +167,9 @@ const buildAlertEmailHtml = (redWells, now) => {
     .map(
       (w) => `
         <tr>
-          <td style="padding:8px;border:1px solid #ddd;">${w.name}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${w.code}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${w.location || '-'}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(w.name)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(w.code)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(w.location || '-')}</td>
           <td style="padding:8px;border:1px solid #ddd;">${formatDateForEmail(w.lastCommunication)}</td>
           <td style="padding:8px;border:1px solid #ddd;text-align:right;">${
             w.minutesSinceLast !== null ? `${Math.floor(w.minutesSinceLast / 60)}h ${w.minutesSinceLast % 60}m` : 'Sin datos'
@@ -212,13 +217,13 @@ const runAlertCheck = async () => {
   const recipient = process.env.ALERT_EMAIL_TO || process.env.EMAIL_USER;
 
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: `"Promedición" <${process.env.EMAIL_USER}>`,
     to: recipient,
     subject: `[Promedición] ${red.length} pozo(s) sin comunicación hace más de 6 horas`,
     html: buildAlertEmailHtml(red, now),
   });
 
-  return { sent: true, criticalCount: red.length, recipient };
+  return { sent: true, criticalCount: red.length };
 };
 
 const sendAlertEmail = async (req, res) => {

@@ -6,9 +6,6 @@ const { Admin } = require('../utils/allowed-roles.util');
 const router = express.Router();
 
 router.get('/monitoring/wells-status', authMiddleware(...Admin), getWellsStatus);
-
-// Endpoints usados por el servicio SENDER (cron interno, sin auth)
-router.get('/monitoring/wells-status/internal', getWellsStatus);
-router.post('/monitoring/send-alert-email', sendAlertEmail);
+router.post('/monitoring/send-alert-email', authMiddleware(...Admin), sendAlertEmail);
 
 module.exports = router;
