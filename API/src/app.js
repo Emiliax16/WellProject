@@ -12,6 +12,7 @@ const companyRoute = require('./routes/company.route');
 const distributorRoute = require('./routes/distributor.route');
 const statsRoute = require('./routes/stats.route');
 const activityLogRoute = require('./routes/activityLog.route');
+const monitoringRoute = require('./routes/monitoring.route');
 
 // App initialization
 const app = express();
@@ -31,6 +32,7 @@ app.use(companyRoute);
 app.use(distributorRoute);
 app.use(statsRoute);
 app.use(activityLogRoute);
+app.use(monitoringRoute);
 
 
 // Ruta formulario de contacto
