@@ -16,7 +16,10 @@ const Person = db.person;
 //  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
 const getAllWells = async (req, res) => {
   try {
-    const wells = await Well.findAll();
+    // Las credenciales DGA del pozo nunca salen en un listado
+    const wells = await Well.findAll({
+      attributes: { exclude: ['password', 'rutEmpresa', 'rutUsuario'] }
+    });
     res.json(wells);
   } catch (error) {
     res.status(500).send({
