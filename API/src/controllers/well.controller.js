@@ -43,7 +43,7 @@ const getWellDataByWell = async (req, res) => {
   try {
     const well = await Well.findOne({ where: { id: req.params.id } });
     if (!well) {
-      res.status(404).send({
+      return res.status(404).send({
         message: 'Well not found'
       });
     }
