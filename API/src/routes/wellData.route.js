@@ -1,5 +1,6 @@
 const express = require("express");
 
+const authMiddleware = require("../middlewares/auth.middleware");
 const {
   createWellData,
   bulkCreateWellData,
@@ -8,13 +9,21 @@ const {
   repostAllReportsToDGA,
   bulkDeleteWellData,
 } = require("../controllers/wellData.controller");
+const {
+  AdminAndCompanyAndNormal,
+} = require("../utils/allowed-roles.util");
 const router = express.Router();
 
+// Ingesta desde los dispositivos IoT: sin JWT a propósito (ver README)
 router.post("/wellData", createWellData);
-router.get("/fetchUnsentReports", fetchUnsentReports);
-router.post("/repostAllReportsToDGA", repostAllReportsToDGA);
-router.post("/repostToDGA", repostToDGA);
 router.post("/massImportWellData", bulkCreateWellData);
-router.delete("/wellData/bulk", bulkDeleteWellData);
+
+// Consumidos por el servicio SENDER: sin JWT a propósito (ver README)
+router.get("/fetchUnsentReports", fetchUnsentReports);
+router.post("/repostToDGA", repostToDGA);
+
+// Acciones disparadas desde el portal: requieren sesión
+router.post("/repostAllReportsToDGA", authMiddleware(...AdminAndCompanyAndNormal), repostAllReportsToDGA);
+router.delete("/wellData/bulk", authMiddleware(...AdminAndCompanyAndNormal), bulkDeleteWellData);
 
 module.exports = router;
