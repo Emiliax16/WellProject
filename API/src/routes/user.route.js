@@ -21,7 +21,7 @@ const {
 console.log(...AdminAndCompany);
 const router = express.Router();
 
-router.get('/users', getUsers);
+router.get('/users', authMiddleware(...Admin), getUsers);
 router.get('/users/data', authMiddleware(...AllRoles), getUserInfo);
 router.get('/users/data/:id', authMiddleware(...AllRoles), getUserInfoById);
 router.post('/users/register',  authMiddleware(...AdminAndCompanyAndDistributor), validateParams(registerParams, true), registerUser);
