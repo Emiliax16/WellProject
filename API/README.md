@@ -31,9 +31,24 @@ Estos endpoints quedan abiertos:
 | `POST /massImportWellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
 | `GET /fetchUnsentReports` | servicio SENDER | llama por HTTP sin token |
 | `POST /repostToDGA` | servicio SENDER | llama por HTTP sin token |
+| `GET /well` | ninguno confirmado | ver más abajo |
 | `POST /users/login` | portal | es el que emite el token |
 | `POST /send-email` | landing page | formulario de contacto público |
 | `GET /placeholder` | ninguno | ruta de ejemplo |
+
+**Sobre `GET /well`.** Devolvía el modelo completo del pozo, credenciales DGA
+incluidas, sin pedir sesión. La fuga se cerró excluyendo `password`,
+`rutEmpresa` y `rutUsuario` de la consulta, pero el endpoint se dejó abierto a
+propósito.
+
+El motivo es que no hay forma de saber desde el código qué endpoints consumen
+los dispositivos de Layrz: no aparecen en este repo ni en el del portal. Si
+usaran este listado para sincronizar el catálogo de pozos, cerrarlo cortaría la
+ingesta de telemetría en silencio. Se prefirió dejar expuesto el catálogo
+(nombre, ubicación y código) antes que arriesgar eso.
+
+Para cerrarlo hay que revisar primero los access logs de producción y descartar
+tráfico externo.
 
 Los cuatro primeros deberían pasar a validar un secreto compartido
 (`INTERNAL_API_KEY`) enviado por header. Eso requiere coordinar el cambio con
