@@ -5,8 +5,11 @@ const ErrorHandler = require('../utils/error.util');
 const authMiddleware = (...role) => {
   return async (req, res, next) => {
     try {
-      // TODO: eliminar el fallback al body cuando el front deje de mandar el
-      // token ahí (Emiliax16/WellProjectFront#38)
+      // TODO: eliminar el fallback al body sólo cuando estos services del portal
+      // dejen de mandar el token ahí. Ninguno está migrado todavía:
+      //   wellServices.activateWell, companyServices (crear y editar),
+      //   clientServices (crear y editar), distributorService (crear y editar).
+      // El PR WellProjectFront#38 los cubre; #40 no, ese resuelve otra cosa.
       const base = req.headers.authorization || req.body?.headers?.Authorization;
       if (!base) {
         throw new ErrorHandler(missingToken);

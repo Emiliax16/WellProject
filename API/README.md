@@ -19,21 +19,43 @@ El proyecto se basa en la creación de una aplicación que permita gestionar dif
 
 ## Endpoints sin autenticación
 
-Todo el resto de la API exige un JWT válido en el header `Authorization`. Estos
-cuatro endpoints quedan abiertos a propósito porque los consumen procesos que
-hoy no tienen forma de autenticarse:
+El resto de la API exige un token válido, que el middleware acepta tanto en el
+header `Authorization` como dentro del body (`body.headers.Authorization`). El
+fallback al body existe porque varios services del portal todavía lo mandan así.
 
-| Endpoint | Consumidor |
-|---|---|
-| `POST /wellData` | dispositivos IoT (Layrz) |
-| `POST /massImportWellData` | dispositivos IoT (Layrz) |
-| `GET /fetchUnsentReports` | servicio SENDER |
-| `POST /repostToDGA` | servicio SENDER |
+Estos endpoints quedan abiertos:
 
-Son un pendiente conocido: los cuatro deberían pasar a validar un secreto
-compartido (`INTERNAL_API_KEY`) enviado por header. Eso requiere coordinar el
-cambio con Layrz y con el deploy del SENDER, así que no entra en el hotfix de
-autorización.
+| Endpoint | Consumidor | Por qué |
+|---|---|---|
+| `POST /wellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
+| `POST /massImportWellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
+| `GET /fetchUnsentReports` | servicio SENDER | llama por HTTP sin token |
+| `POST /repostToDGA` | servicio SENDER | llama por HTTP sin token |
+| `POST /users/login` | portal | es el que emite el token |
+| `POST /send-email` | landing page | formulario de contacto público |
+| `GET /placeholder` | ninguno | ruta de ejemplo |
 
-Ojo con `POST /wellData` y `POST /massImportWellData`: hoy cualquiera puede
-inyectar telemetría falsa si conoce el `code` de un pozo.
+Los cuatro primeros deberían pasar a validar un secreto compartido
+(`INTERNAL_API_KEY`) enviado por header. Eso requiere coordinar el cambio con
+Layrz y con el deploy del SENDER, así que no entra en el hotfix de autorización.
+
+### Consecuencias que conviene tener presentes
+
+**Se puede inyectar telemetría falsa.** `POST /wellData` y `POST
+/massImportWellData` aceptan reportes de cualquiera que conozca el `code` de un
+pozo. Ese código viaja en las respuestas de varios endpoints del portal.
+
+**El reenvío a la DGA sigue siendo disparable sin sesión.**
+`POST /repostAllReportsToDGA` exige sesión, pero `POST /repostToDGA` hace lo
+mismo de a un reporte y queda abierto. Autenticar el primero sube el costo de
+abusar el reenvío, no lo impide. Cerrar el segundo depende del SENDER.
+
+**`POST /send-email` es un relay de correo abierto.** No tiene rate limit ni
+captcha, y despacha desde la cuenta de Gmail configurada en `EMAIL_USER`. Abusarlo
+puede terminar con la cuenta bloqueada por Google.
+
+**Ni el borrado masivo ni el reenvío validan pertenencia.**
+`DELETE /wellData/bulk` y `POST /repostAllReportsToDGA` operan sobre los `id` que
+reciben sin comprobar que los reportes sean de un pozo del cliente que hace la
+petición. Exigen sesión, pero cualquier usuario autenticado puede tocar reportes
+de otro cliente. Los `id` son autoincrementales, así que no hay que adivinarlos.
