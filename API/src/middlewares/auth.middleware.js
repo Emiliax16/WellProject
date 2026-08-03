@@ -5,11 +5,16 @@ const ErrorHandler = require('../utils/error.util');
 const authMiddleware = (...role) => {
   return async (req, res, next) => {
     try {
-      if (!req.headers.authorization && (req.body.headers && !req.body.headers.Authorization)) {
+      // TODO: eliminar el fallback al body cuando el front deje de mandar el
+      // token ahí (Emiliax16/WellProjectFront#38)
+      const base = req.headers.authorization || req.body?.headers?.Authorization;
+      if (!base) {
         throw new ErrorHandler(missingToken);
       }
-      const base = req.headers.authorization ? req.headers.authorization : req.body.headers.Authorization;
       const token = base.split(' ')[1];
+      if (!token) {
+        throw new ErrorHandler(missingToken);
+      }
       const decoded = decodeToken(token);
       if (!decoded) {
         throw new ErrorHandler(unauthorized);
