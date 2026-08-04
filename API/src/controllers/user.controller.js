@@ -347,10 +347,10 @@ const loginUser = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandler(userNotFound);
     }
-    // const isValid = await user.checkPassword(password);
-    // if (!isValid) {
-    //   throw new ErrorHandler(passwordsDontMatch);
-    // }
+    const isValid = await user.checkPassword(password);
+    if (!isValid) {
+      throw new ErrorHandler(passwordsDontMatch);
+    }
     const role = await user.getRole();
     if (role.type !== "admin" && !user.isActived) {
       throw new ErrorHandler(unauthorized);
