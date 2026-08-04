@@ -5,11 +5,19 @@ const ErrorHandler = require('../utils/error.util');
 const authMiddleware = (...role) => {
   return async (req, res, next) => {
     try {
-      if (!req.headers.authorization && (req.body.headers && !req.body.headers.Authorization)) {
+      // TODO: eliminar el fallback al body sólo cuando estos services del portal
+      // dejen de mandar el token ahí. Ninguno está migrado todavía:
+      //   wellServices.activateWell, companyServices (crear y editar),
+      //   clientServices (crear y editar), distributorService (crear y editar).
+      // El PR WellProjectFront#38 los cubre; #40 no, ese resuelve otra cosa.
+      const base = req.headers.authorization || req.body?.headers?.Authorization;
+      if (!base) {
         throw new ErrorHandler(missingToken);
       }
-      const base = req.headers.authorization ? req.headers.authorization : req.body.headers.Authorization;
       const token = base.split(' ')[1];
+      if (!token) {
+        throw new ErrorHandler(missingToken);
+      }
       const decoded = decodeToken(token);
       if (!decoded) {
         throw new ErrorHandler(unauthorized);

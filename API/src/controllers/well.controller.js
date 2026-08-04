@@ -16,7 +16,12 @@ const Person = db.person;
 //  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
 const getAllWells = async (req, res) => {
   try {
-    const wells = await Well.findAll();
+    // Este listado es global y no filtra por cliente, así que no carga las
+    // credenciales DGA. Los listados por cliente (/clients/:id/wells) sí las
+    // devuelven, porque el formulario de edición del portal las necesita.
+    const wells = await Well.findAll({
+      attributes: { exclude: ['password', 'rutEmpresa', 'rutUsuario'] }
+    });
     res.json(wells);
   } catch (error) {
     res.status(500).send({
@@ -40,7 +45,7 @@ const getWellDataByWell = async (req, res) => {
   try {
     const well = await Well.findOne({ where: { id: req.params.id } });
     if (!well) {
-      res.status(404).send({
+      return res.status(404).send({
         message: 'Well not found'
       });
     }
