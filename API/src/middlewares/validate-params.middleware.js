@@ -15,8 +15,9 @@ function validateParams(paramsSpec, registerUser = false) {
     // hacer una excepción, puesto que si el usuario es normal o admin, se
     // necesitan parámetros de Person, pero si es empresa, se necesitan parámetros
     // de Company
-    console.log('THIS IS THE REQ.BODY', req.body);
-    
+    // No loguear `req.body`: este middleware corre en /users/login y
+    // /users/register (contraseña del usuario en texto plano) y en la
+    // creación y edición de pozos (credenciales DGA).
 
     let type = req.body.roleType;
 

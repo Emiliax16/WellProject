@@ -138,7 +138,6 @@ const registerUser = async (req, res, next) => {
 
   try {
     const { id: requesterId, type: requesterRole } = req.user;
-    console.log("receiving this body:", req.body);
     if (!checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
     }
@@ -154,7 +153,8 @@ const registerUser = async (req, res, next) => {
     };
 
     const role = await Role.findByPk(userParams.roleId, { transaction });
-    console.log("\n\nUSER Y ROLE!!!!!!\n\n:", userParams, role, req.body);
+    // `userParams` y `req.body` llevan `encrypted_password` sin hashear.
+    console.log(`[users] registrando ${userParams.email} con rol ${role?.type}`);
 
     if (!role) {
       throw new ErrorHandler(userNotFound);

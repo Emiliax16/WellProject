@@ -71,7 +71,11 @@ module.exports = (sequelize, DataTypes) => {
               await processAndPostData(wellData, well);
             }
           } catch (error) {
-            console.log(error);
+            // Sólo el mensaje: un error de axios arrastra `config.data`, que
+            // lleva las credenciales DGA del pozo.
+            console.error(
+              `[dga] falló el envío automático del reporte ${wellData.id} (${wellData.code}): ${error.message}`
+            );
           }
         },
       },
