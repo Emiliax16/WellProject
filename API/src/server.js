@@ -10,17 +10,15 @@ const server = app.listen(PORT, () => {
     startSchedulers();
 });
 
-// Cierra conexiones keep-alive ociosas y acota la fase de recepción de
-// cabeceras. `headersTimeout` va por encima de `keepAliveTimeout` para evitar
-// la condición de carrera que Node documenta entre ambos.
-//
 // A propósito NO se fija `server.setTimeout`: acota la duración total del
 // manejador, y acá hay peticiones legítimamente largas. `POST /wellData` espera
 // hasta 12 s a la DGA, y `POST /repostAllReportsToDGA` reenvía lotes de a 3 en
 // paralelo, así que puede tardar minutos. Un tope de request cortaría envíos
 // reales al regulador.
-server.keepAliveTimeout = 65_000;
-server.headersTimeout = 66_000;
+//
+// Los timeouts de conexiones ociosas (`keepAliveTimeout`, `headersTimeout`) van
+// aparte, porque hay que contrastarlos con la configuración de Nginx antes de
+// aplicarlos.
 
 const registrarFatal = (tipo, error) => {
     console.error(JSON.stringify({
