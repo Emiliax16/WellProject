@@ -312,6 +312,10 @@ const fetchUnsentReports = async (req, res, next) => {
         {
           model: Well,
           as: "well",
+          // Esta ruta es pública (la consume el SENDER), así que el pozo no
+          // puede viajar con sus credenciales DGA. El join se mantiene porque
+          // el `where` de arriba lo necesita.
+          attributes: { exclude: ["password", "rutEmpresa", "rutUsuario"] },
           where: {
             isActived: true,
             editStatusDate: {
