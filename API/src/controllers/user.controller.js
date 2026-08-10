@@ -198,9 +198,14 @@ const getUserInfoById = async (req, res, next) => {
 //                USER AUTH
 
 const registerUser = async (req, res, next) => {
-  const transaction = await sequelize.transaction();
+  // Se declara fuera y se abre dentro del try: si `transaction()` falla —por
+  // ejemplo con el pool agotado—, era el único `await` de un handler que
+  // quedaba fuera de un try en todo el repo, así que su rechazo no lo recogía
+  // nadie y mataba el proceso.
+  let transaction;
 
   try {
+    transaction = await sequelize.transaction();
     const { id: requesterId, type: requesterRole } = req.user;
     if (!await checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
@@ -410,7 +415,20 @@ const registerUser = async (req, res, next) => {
     const token = await user.generateToken();
     res.json({ user, token });
   } catch (error) {
-    await transaction.rollback();
+    // Sólo se revierte si la transacción sigue abierta. Buena parte de este
+    // handler corre DESPUÉS del commit (los registros de actividad y
+    // `generateToken`), y si algo falla ahí, el rollback sobre una transacción
+    // ya cerrada lanza «Transaction cannot be rolled back because it has been
+    // finished with state: commit». Ese throw ocurre dentro del catch, así que
+    // nadie lo recoge: `next(error)` no llega a correr, el cliente se queda sin
+    // respuesta y el proceso muere por rejection no capturada.
+    if (transaction && !transaction.finished) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error(`[users] falló el rollback del registro: ${rollbackError.message}`);
+      }
+    }
     next(error);
   }
 };

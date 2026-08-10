@@ -43,8 +43,40 @@ describe('validateParams', () => {
     );
 
     it('acepta un roleId entero y lo consulta normalizado', async () => {
-      await correr(validateParams(spec), { email: 'a@b.cl', roleId: '3' });
+      const body = { email: 'a@b.cl', roleId: '3' };
+      await correr(validateParams(spec), body);
       expect(mockRoleFindByPk).toHaveBeenCalledWith(3);
+      // El controlador debe recibir el entero, no la cadena.
+      expect(body.roleId).toBe(3);
+    });
+
+    it('si la consulta a la base falla, delega el error en vez de reventar', async () => {
+      // Es el escenario de base caída, y es justo la forma del defecto que
+      // este PR cierra: un rechazo sin recoger dentro de un middleware async
+      // mata el proceso.
+      mockRoleFindByPk.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      const llamadas = await correr(validateParams(spec), { email: 'a@b.cl', roleId: 3 });
+      expect(llamadas).toHaveLength(1);
+      expect(llamadas[0]).toBeInstanceOf(Error);
+    });
+
+    it('deja pasar enteros fuera del rango de int4 sin romper', async () => {
+      // Postgres resuelve `int4 = int8` sin error, así que estos llegan a la
+      // consulta y simplemente no encuentran fila. Se fija el comportamiento
+      // para que un cambio futuro no los convierta en un error de casteo.
+      for (const roleId of ['2147483648', '1e30']) {
+        mockRoleFindByPk.mockResolvedValue(null);
+        const llamadas = await correr(validateParams(spec), { email: 'a@b.cl', roleId });
+        expect(llamadas).toEqual([null]);
+      }
+    });
+
+    it('un roleType que no es string no salta la validación', async () => {
+      // `roleType` lo controla quien llama y cortocircuita la consulta a la
+      // base, así que conviene fijar que un objeto no se cuela como tipo.
+      const llamadas = await correr(validateParams(spec), { email: 'a@b.cl', roleType: { a: 1 } });
+      expect(llamadas).toEqual([null]);
+      expect(mockRoleFindByPk).not.toHaveBeenCalled();
     });
 
     it('no consulta la base cuando no viene roleId', async () => {

@@ -35,6 +35,10 @@ const resolverTipoDeRol = async (body) => {
     throw new ErrorHandler({ message: 'El parámetro roleId no es válido', code: 400 });
   }
 
+  // Se normaliza en el body para que el controlador reciba el entero validado
+  // y no la cadena cruda, igual que hace `assert-role-change.js`.
+  body.roleId = id;
+
   const role = await Role.findByPk(id);
   return role?.type;
 };
