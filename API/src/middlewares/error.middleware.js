@@ -1,7 +1,18 @@
 const { ValidationError, ConnectionError, DatabaseError } = require('sequelize');
 const ErrorHandler = require('../utils/error.util');
 
-const enProduccion = process.env.NODE_ENV === 'production';
+// El stack se registra salvo que se pida lo contrario con LOG_STACK=false.
+//
+// A propósito NO se cuelga de `NODE_ENV === 'production'`: `config/config.js`
+// no tiene bloque `production`, así que con ese valor `models/index.js` resuelve
+// la configuración a `undefined` y la aplicación no arranca. O sea que en este
+// despliegue `NODE_ENV` nunca puede valer `production`, y la condición sería
+// código muerto: creeríamos estar ocultando el stack sin ocultarlo. Peor aún,
+// el día que alguien agregue ese bloque perderíamos el stack en silencio.
+//
+// Hoy conviene registrarlo: no hay Sentry ni agregador de logs, así que
+// `docker logs` es el único diagnóstico disponible.
+const registrarStack = process.env.LOG_STACK !== 'false';
 
 const errorHandler = (err, req, res, next) => {
   // Si la respuesta ya salió, intentar responder de nuevo lanza
@@ -20,7 +31,7 @@ const errorHandler = (err, req, res, next) => {
     name: err.name,
     method: req.method,
     url: req.originalUrl,
-    stack: enProduccion ? undefined : err.stack,
+    stack: registrarStack ? err.stack : undefined,
     at: new Date().toISOString(),
   }));
 

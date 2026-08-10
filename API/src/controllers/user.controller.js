@@ -5,6 +5,7 @@ const {
   userNotFound,
   passwordsDontMatch,
   unauthorized,
+  clientNotFound,
 } = require("../utils/errorcodes.util");
 const checkPermissionsForClientResources = require("../utils/check-permissions");
 const company = require("../../models/company");
@@ -155,6 +156,9 @@ const getUserInfoById = async (req, res, next) => {
     const { id: clientId } = req.params;
 
     const client = await Client.findByPk(clientId);
+    if (!client) {
+      throw new ErrorHandler(clientNotFound);
+    }
     const userId = client.userId;
 
     if (!await checkPermissionsForClientResources(req.user, client)) {
@@ -179,7 +183,10 @@ const getUserInfoById = async (req, res, next) => {
     const role = await Role.findByPk(user.roleId);
 
     if (!role) {
-      throw new ErrorHandler(roleNotFound);
+      // `roleNotFound` no existe en errorcodes.util, así que esta línea
+      // lanzaba «ReferenceError: roleNotFound is not defined» en vez del 404
+      // que pretendía.
+      throw new ErrorHandler(userNotFound);
     }
 
     const userWithRole = {

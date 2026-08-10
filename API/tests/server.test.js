@@ -10,12 +10,12 @@ const path = require('path');
 
 const API = path.join(__dirname, '..');
 
-// Cada subproceso usa un puerto propio para poder correr en paralelo.
-let siguientePuerto = 3960;
-
+// Puerto 0 = el sistema asigna uno libre. Con puertos fijos, dos corridas
+// simultáneas chocan con EADDRINUSE, que además ahora es una excepción no
+// capturada y tumbaría el subproceso.
 const levantar = (inyectar = 'void 0;', senal = null) =>
   new Promise((resolve) => {
-    const puerto = siguientePuerto++;
+    const puerto = 0;
     const guion = `
       process.env.PORT = '${puerto}';
       const axios = require(${JSON.stringify(path.join(API, 'node_modules/axios'))});
@@ -29,11 +29,17 @@ const levantar = (inyectar = 'void 0;', senal = null) =>
     `;
     const hijo = spawn(process.execPath, ['-e', guion], { cwd: API });
 
-    let salida = '';
-    hijo.stdout.on('data', (d) => { salida += d; });
-    hijo.stderr.on('data', (d) => { salida += d; });
+    // Se acumulan por separado: los logs fatales van a stderr y el arranque a
+    // stdout, y concatenarlos permite que una línea se intercale dentro de otra
+    // y rompa el JSON.parse.
+    let stdout = '';
+    let stderr = '';
+    hijo.stdout.on('data', (d) => { stdout += d; });
+    hijo.stderr.on('data', (d) => { stderr += d; });
     if (senal) setTimeout(() => hijo.kill(senal), 500);
-    hijo.on('exit', (code) => resolve({ code, salida }));
+    // Se espera a 'close' y no a 'exit': en 'exit' los pipes pueden no estar
+    // drenados todavía y la salida llegaría truncada.
+    hijo.on('close', (code) => resolve({ code, stdout, stderr, salida: stdout + stderr }));
   });
 
 // Extrae la línea de log estructurado del tipo pedido.
@@ -49,20 +55,20 @@ describe('server', () => {
     // El runbook de despliegue usa "Escuchando en el puerto N" para confirmar
     // que la aplicación recargó tras el git pull. Cambiar ese texto rompe la
     // verificación documentada.
-    const { salida } = await levantar();
+    const { stdout } = await levantar();
 
-    expect(salida).toMatch(/Escuchando en el puerto \d+/);
-    expect(salida).toMatch(/\[scheduler\]/);
+    expect(stdout).toMatch(/Escuchando en el puerto \d+/);
+    expect(stdout).toMatch(/\[scheduler\]/);
   });
 
   describe('excepción no capturada', () => {
     it('registra el detalle y sale con código 1', async () => {
       // Antes el proceso moría sin más rastro que el stack de Node, y con
       // nodemon quedaba caído sin que nadie se enterara.
-      const { code, salida } = await levantar("setTimeout(() => { throw new Error('boom'); }, 0);");
+      const { code, stderr } = await levantar("setTimeout(() => { throw new Error('boom'); }, 0);");
 
       expect(code).toBe(1);
-      const registro = registroDe(salida, 'uncaughtException');
+      const registro = registroDe(stderr, 'uncaughtException');
       expect(registro).toMatchObject({ level: 'fatal', message: 'boom' });
       expect(registro.stack).toBeTruthy();
       expect(registro.at).toBeTruthy();
@@ -71,20 +77,20 @@ describe('server', () => {
 
   describe('rejection no capturada', () => {
     it('registra el motivo y sale con código 1', async () => {
-      const { code, salida } = await levantar("Promise.reject(new Error('promesa rota'));");
+      const { code, stderr } = await levantar("Promise.reject(new Error('promesa rota'));");
 
       expect(code).toBe(1);
-      expect(registroDe(salida, 'unhandledRejection')).toMatchObject({
+      expect(registroDe(stderr, 'unhandledRejection')).toMatchObject({
         level: 'fatal',
         message: 'promesa rota',
       });
     });
 
     it('también registra un rechazo que no es un Error', async () => {
-      const { code, salida } = await levantar("Promise.reject('texto suelto');");
+      const { code, stderr } = await levantar("Promise.reject('texto suelto');");
 
       expect(code).toBe(1);
-      expect(registroDe(salida, 'unhandledRejection').message).toBe('texto suelto');
+      expect(registroDe(stderr, 'unhandledRejection').message).toBe('texto suelto');
     });
   });
 
@@ -92,10 +98,10 @@ describe('server', () => {
     // Importa porque un POST /wellData en vuelo puede estar transmitiendo al
     // regulador: se deja de aceptar conexiones y se espera a las que están.
     it.each(['SIGTERM', 'SIGINT'])('%s cierra con código 0 y lo deja registrado', async (senal) => {
-      const { code, salida } = await levantar('void 0;', senal);
+      const { code, stdout } = await levantar('void 0;', senal);
 
       expect(code).toBe(0);
-      expect(salida).toMatch(new RegExp(`${senal} recibido`));
+      expect(stdout).toMatch(new RegExp(`${senal} recibido`));
     });
   });
 });
