@@ -1,6 +1,7 @@
 const db = require("../../models");
 const ErrorHandler = require("../utils/error.util");
 const checkPermissionsForClientResources = require("../utils/check-permissions");
+const assertCanChangeRole = require("../utils/assert-role-change");
 const {
   companyNotFound,
   distributorNotFound,
@@ -191,6 +192,10 @@ const editDistributor = async (req, res, next) => {
     if (!await checkPermissionsForClientResources(req.user, distributor)) {
       throw new ErrorHandler(unauthorized);
     }
+
+    // Hoy la ruta es admin-only, así que es un no-op. Va igual para que
+    // ampliar los roles de la ruta no reabra el escalamiento en silencio.
+    assertCanChangeRole(req.user, user, req.body);
 
     const password = req.body.encrypted_password;
 

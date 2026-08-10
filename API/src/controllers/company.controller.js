@@ -1,6 +1,7 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
+const assertCanChangeRole = require('../utils/assert-role-change');
 const { companyNotFound, clientNotFound, clientDoesntBelongToCompany, clientHasNoUserOrPersonAssociated, unauthorized } = require('../utils/errorcodes.util');
 
 const Company = db.company;
@@ -199,6 +200,8 @@ const editCompany = async (req, res, next) => {
     if (!await checkPermissionsForClientResources(req.user, company)) {
       throw new ErrorHandler(unauthorized);
     }
+
+    assertCanChangeRole(req.user, user, req.body);
 
     const password = req.body.encrypted_password;
 
