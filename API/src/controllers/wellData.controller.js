@@ -15,12 +15,23 @@ const { bulkCreateWellDataIsNotArray, unauthorized } = require("../utils/errorco
 // si la petición trae algo que no le corresponde, es un error de quien llama,
 // y borrar o transmitir "sólo una parte" es peor que rechazar.
 const assertOwnsReports = async (requester, reports) => {
+  // Se comprueba una vez por cliente distinto, no una vez por reporte:
+  // checkPermissions consulta la base, y un lote de miles de reportes casi
+  // siempre pertenece a uno o dos clientes.
+  const porCliente = new Map();
   for (const report of reports) {
-    const permitido = await checkPermissionsForClientResources(
-      requester,
-      report.well?.client
-    );
-    if (!permitido) {
+    const cliente = report.well?.client;
+    // Sin cliente resoluble no se puede afirmar pertenencia: se niega.
+    if (!cliente) {
+      throw new ErrorHandler(unauthorized);
+    }
+    if (!porCliente.has(cliente.id)) {
+      porCliente.set(cliente.id, cliente);
+    }
+  }
+
+  for (const cliente of porCliente.values()) {
+    if (!await checkPermissionsForClientResources(requester, cliente)) {
       throw new ErrorHandler(unauthorized);
     }
   }

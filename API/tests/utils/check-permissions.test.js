@@ -120,5 +120,65 @@ describe('checkPermissionsForClientResources', () => {
       await expect(checkPermissions(EMPRESA, undefined)).resolves.toBe(false);
       await expect(checkPermissions(EMPRESA, null)).resolves.toBe(false);
     });
+
+    it('isCreation cortocircuita aunque se pase una entidad ajena', async () => {
+      // Comportamiento deliberado y peligroso si se usa mal: `isCreation` va
+      // antes que cualquier comprobación de pertenencia. Sólo debe pasarse en
+      // altas reales, donde todavía no hay entidad.
+      await expect(checkPermissions(EMPRESA, clienteDeOtraEmpresa, true)).resolves.toBe(true);
+    });
+  });
+
+  describe('casos que rompen la cadena de la jerarquía', () => {
+    it('distribuidora no accede a un cliente sin empresa', async () => {
+      // Un cliente sin `companyId` no cuelga de ninguna distribuidora.
+      await expect(checkPermissions(DISTRIBUIDORA, { userId: 99, companyId: null })).resolves.toBe(false);
+    });
+
+    it('distribuidora no accede si la empresa del cliente no existe', async () => {
+      mockCompanyFindByPk.mockResolvedValue(null);
+      await expect(checkPermissions(DISTRIBUIDORA, clientePropio)).resolves.toBe(false);
+    });
+
+    it('ser dueño tiene precedencia sobre las ramas de rol', async () => {
+      // Aunque la empresa del solicitante no coincida, el registro es suyo.
+      mockCompanyFindOne.mockResolvedValue({ id: 999 });
+      await expect(checkPermissions(EMPRESA, { userId: 4, companyId: 1 })).resolves.toBe(true);
+      expect(mockCompanyFindOne).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('los llamadores no pueden olvidar el await', () => {
+  // El test de arriba sólo comprueba que la función devuelve una Promise. Esto
+  // es lo que de verdad guarda contra la regresión del #60: si alguien agrega
+  // una llamada sin `await`, la validación vuelve a no bloquear nada y no hay
+  // ningún síntoma visible.
+  const fs = require('fs');
+  const path = require('path');
+
+  const archivosJs = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? archivosJs(p) : p.endsWith('.js') ? [p] : [];
+    });
+
+  it('todas las invocaciones en src/ llevan await', () => {
+    const raiz = path.join(__dirname, '..', '..', 'src');
+    const sinAwait = [];
+
+    for (const archivo of archivosJs(raiz)) {
+      const lineas = fs.readFileSync(archivo, 'utf8').split('\n');
+      lineas.forEach((linea, i) => {
+        // Se ignoran el require y la definición de la propia función.
+        if (!linea.includes('checkPermissionsForClientResources(')) return;
+        if (linea.includes('require(') || linea.includes('=')) return;
+        if (!linea.includes('await checkPermissionsForClientResources(')) {
+          sinAwait.push(`${path.relative(raiz, archivo)}:${i + 1}`);
+        }
+      });
+    }
+
+    expect(sinAwait).toEqual([]);
   });
 });

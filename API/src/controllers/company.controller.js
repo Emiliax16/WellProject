@@ -1,7 +1,7 @@
 const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
-const { companyNotFound, clientNotFound, clientDoesntBelongToCompany, clientHasNoUserOrPersonAssociated } = require('../utils/errorcodes.util');
+const { companyNotFound, clientNotFound, clientDoesntBelongToCompany, clientHasNoUserOrPersonAssociated, unauthorized } = require('../utils/errorcodes.util');
 
 const Company = db.company;
 const User = db.user;

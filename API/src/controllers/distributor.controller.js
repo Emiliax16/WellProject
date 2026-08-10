@@ -6,6 +6,7 @@ const {
   distributorNotFound,
   companyDoesntBelongToDistributor,
   distributorHasNoUserOrPersonAssociated,
+  unauthorized,
 } = require("../utils/errorcodes.util");
 
 const Company = db.company;
