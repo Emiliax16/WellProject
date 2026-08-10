@@ -4,6 +4,7 @@ const ErrorHandler = require("../src/utils/error.util");
 const { badPasswordValidation } = require("../src/utils/errorcodes.util");
 
 const { Model } = require("sequelize");
+const soloCampos = require('../src/utils/only-fields.util');
 module.exports = (sequelize, DataTypes) => {
   class distributor extends Model {
     /**
@@ -79,11 +80,6 @@ module.exports = (sequelize, DataTypes) => {
   const CAMPOS_EDITABLES_DISTRIBUTOR = [
     "distributorLogo", "distributorRut", "phoneNumber", "recoveryEmail", "location",
   ];
-
-  const soloCampos = (data, permitidos) =>
-    Object.fromEntries(
-      Object.entries(data).filter(([campo]) => permitidos.includes(campo))
-    );
 
   distributor.prototype.updateDetails = async function (user, data) {
     if (data.encrypted_password) {

@@ -2,6 +2,7 @@
 
 const ErrorHandler = require('../src/utils/error.util');
 const { badPasswordValidation } = require('../src/utils/errorcodes.util');
+const soloCampos = require('../src/utils/only-fields.util');
 
 const {
   Model
@@ -42,11 +43,6 @@ module.exports = (sequelize, DataTypes) => {
   // texto plano y dejaría la cuenta sin poder iniciar sesión.
   const CAMPOS_EDITABLES_USER = ['name', 'email', 'roleId', 'isActived'];
   const CAMPOS_EDITABLES_PERSON = ['fullName', 'personalEmail', 'phoneNumber', 'location'];
-
-  const soloCampos = (data, permitidos) =>
-    Object.fromEntries(
-      Object.entries(data).filter(([campo]) => permitidos.includes(campo))
-    );
 
   client.prototype.updateDetails = async function (user, person, data) {
     if (data.encrypted_password) {

@@ -2,6 +2,21 @@ const db = require('../../models');
 const ErrorHandler = require('../utils/error.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
 const assertCanChangeRole = require('../utils/assert-role-change');
+const soloCampos = require('../utils/only-fields.util');
+
+// Lo único que se puede escribir en un pozo desde el portal.
+//
+// Fuera quedan `clientId`, que decidiría a qué cuenta pertenece el pozo, y
+// `editStatusDate`, que fija el controlador al activar o desactivar y que
+// `fetchUnsentReports` usa para decidir qué reportes reintentar: escribirla a
+// futuro deja los envíos fallidos de ese pozo sin reintentar jamás.
+//
+// Las credenciales DGA sí entran: el formulario del pozo las edita
+// (`wellForm.js` registra `rutEmpresa`, `rutUsuario` y `password`), y quien
+// llega hasta acá ya pasó la validación de pertenencia.
+const CAMPOS_EDITABLES_WELL = [
+  'name', 'location', 'code', 'isActived', 'rutEmpresa', 'rutUsuario', 'password',
+];
 const {
   unauthorized,
   userHasNoClientAssociated,
@@ -230,7 +245,7 @@ const editClientWell = async (req, res, next) => {
     const willBeActive = req.body.isActived !== undefined ? req.body.isActived : wasActive;
     const activationChanged = wasActive !== willBeActive;
 
-    await well.update(req.body);
+    await well.update(soloCampos(req.body, CAMPOS_EDITABLES_WELL));
 
     // Log activation/deactivation
     if (activationChanged) {
@@ -391,7 +406,10 @@ const createClientWell = async (req, res, next) => {
       throw new ErrorHandler(unauthorized);
     }
 
-    const well = await Well.create({ ...req.body, clientId: client.id });
+    const well = await Well.create({
+      ...soloCampos(req.body, CAMPOS_EDITABLES_WELL),
+      clientId: client.id,
+    });
 
     // Create activity log
     try {

@@ -2,6 +2,7 @@
 
 const ErrorHandler = require('../src/utils/error.util');
 const { badPasswordValidation } = require('../src/utils/errorcodes.util');
+const soloCampos = require('../src/utils/only-fields.util');
 
 const {
   Model
@@ -73,11 +74,6 @@ module.exports = (sequelize, DataTypes) => {
   const CAMPOS_EDITABLES_COMPANY = [
     'companyLogo', 'companyRut', 'phoneNumber', 'recoveryEmail', 'location', 'distributorId',
   ];
-
-  const soloCampos = (data, permitidos) =>
-    Object.fromEntries(
-      Object.entries(data).filter(([campo]) => permitidos.includes(campo))
-    );
 
   company.prototype.updateDetails = async function (user, data) {
     if (data.encrypted_password) {
