@@ -71,7 +71,14 @@ module.exports = (sequelize, DataTypes) => {
               await processAndPostData(wellData, well);
             }
           } catch (error) {
-            console.log(error);
+            // Nunca loguear el error completo: si alguna vez llega hasta acá
+            // un error de axios sin pasar por postToDgaV2, `util.inspect` lo
+            // expande e imprime `config.data`, o sea el cuerpo enviado con las
+            // credenciales DGA dentro. `error.stack` no las arrastra, así que
+            // sí se puede conservar la traza.
+            console.error(
+              `[dga] falló el envío automático del reporte ${wellData.id} (${wellData.code}): ${error.stack || error.message}`
+            );
           }
         },
       },

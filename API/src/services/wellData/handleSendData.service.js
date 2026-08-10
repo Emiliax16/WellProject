@@ -82,11 +82,16 @@ const normalizeHourFormat = (hour) => {
 const processAndPostData = async (wellData, well) => {
   try {
     const data = { ...well.toJSON(), ...wellData.toJSON() };
-    console.log("Data to be sent:", data);
+    // Nunca loguear `data` ni `formatedData`: ambos llevan las credenciales
+    // DGA del pozo (password, rutEmpresa, rutUsuario) en texto plano.
+    console.log(
+      `[dga] enviando reporte ${wellData.id} | pozo ${wellData.code} | ${wellData.date} ${wellData.hour}`
+    );
     const formatedData = await formaDataV2(data);
-    console.log("Formatted data:", formatedData);
     const response = await postToDgaV2(formatedData, wellData.code);
-    console.log("Response from DGA:", response.data);
+    console.log(
+      `[dga] respuesta reporte ${wellData.id} | status ${response?.status} | ${response?.message ?? "sin mensaje"}`
+    );
     if (!checkValidResponseV2(response))
       throw new ErrorHandler(couldntPostToDga);
     await wellData.update({
@@ -111,7 +116,6 @@ const processAndPostData = async (wellData, well) => {
  * @returns {Object} - Retorna un objeto JSON formateado listo para ser enviado a la DGA.
  */
 const formaDataV2 = async (data) => {
-  console.log("this is the data", data);
   const fecha = data.realDate || data.date;
   return {
     autenticacion: {
@@ -285,7 +289,7 @@ const formatRequest = async (data) => {
         },
       },
     });
-    console.log("---- XML ----\n", xml);
+    // El XML incluye `aut1:password`, así que no se loguea.
     return xml;
   } catch (error) {
     throw error;
