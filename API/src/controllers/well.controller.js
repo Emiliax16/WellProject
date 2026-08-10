@@ -14,7 +14,7 @@ const User = db.user;
 const Person = db.person;
 
 //  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
-const getAllWells = async (req, res) => {
+const getAllWells = async (req, res, next) => {
   try {
     // Este listado es global y no filtra por cliente, así que no carga las
     // credenciales DGA. Los listados por cliente (/clients/:id/wells) sí las
@@ -24,24 +24,24 @@ const getAllWells = async (req, res) => {
     });
     res.json(wells);
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while retrieving Wells'
-    });
+    // Se delega en el middleware de errores. Respondiendo acá con
+    // `error.message` se filtraba el detalle interno —un fallo de conexión
+    // devolvía «connect ECONNREFUSED 127.0.0.1:5432»— y encima por una ruta
+    // que no exige sesión.
+    next(error);
   }
 }
 
-const createWell = async (req, res) => {
+const createWell = async (req, res, next) => {
   try { 
     const well = await Well.create(req.body)
     res.json({created: well})
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while creating the Well'
-    });
+    next(error);
   }
 }
 
-const getWellDataByWell = async (req, res) => {
+const getWellDataByWell = async (req, res, next) => {
   try {
     const well = await Well.findOne({ where: { id: req.params.id } });
     if (!well) {
@@ -53,10 +53,7 @@ const getWellDataByWell = async (req, res) => {
     const wellDataInfo = await well.getWellData()
     res.json(wellDataInfo)
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while retrieving Well Data'
-    });
-  
+    next(error);
   }
 }
 
