@@ -187,7 +187,7 @@ const editDistributor = async (req, res, next) => {
       throw new ErrorHandler(distributorHasNoUserOrPersonAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, distributor)) {
+    if (!await checkPermissionsForClientResources(req.user, distributor)) {
       throw new ErrorHandler(unauthorized);
     }
 

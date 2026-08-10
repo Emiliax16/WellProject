@@ -196,7 +196,7 @@ const editCompany = async (req, res, next) => {
       throw new ErrorHandler(clientHasNoUserOrPersonAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, company)) {
+    if (!await checkPermissionsForClientResources(req.user, company)) {
       throw new ErrorHandler(unauthorized);
     }
 

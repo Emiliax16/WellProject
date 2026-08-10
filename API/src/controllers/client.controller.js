@@ -67,7 +67,7 @@ const editClient = async (req, res, next) => {
       throw new ErrorHandler(clientHasNoUserOrPersonAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -97,7 +97,7 @@ const deleteClient = async (req, res, next) => {
     }
     const user = await client.getUser();
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -118,7 +118,7 @@ const getClientWells = async (req, res, next) => {
       throw new ErrorHandler(clientNotFound);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -147,7 +147,7 @@ const getOneWell = async (req, res, next) => {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -203,7 +203,7 @@ const editClientWell = async (req, res, next) => {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -282,7 +282,7 @@ const deleteClientWell = async (req, res, next) => {
       throw new ErrorHandler(userHasNoClientAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -317,7 +317,7 @@ const getWellData = async (req, res, next) => {
       throw new ErrorHandler(clientNotFound);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
     const well = await Well.findOne({ where: { code: wellCode, clientId: client.id } });
@@ -384,7 +384,7 @@ const createClientWell = async (req, res, next) => {
       throw new ErrorHandler(clientNotFound);
     }
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 

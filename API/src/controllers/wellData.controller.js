@@ -2,11 +2,29 @@ const db = require("../../models");
 
 const Well = db.well;
 const WellData = db.wellData;
+const Client = db.client;
 
 const processAndPostData = require("../services/wellData/handleSendData.service");
 const ErrorHandler = require("../utils/error.util");
+const checkPermissionsForClientResources = require("../utils/check-permissions");
 const moment = require("moment-timezone");
-const { bulkCreateWellDataIsNotArray } = require("../utils/errorcodes.util");
+const { bulkCreateWellDataIsNotArray, unauthorized } = require("../utils/errorcodes.util");
+
+// Comprueba que el solicitante pueda operar sobre todos los reportes de la
+// tanda. Se exige el lote completo en vez de filtrar los ajenos en silencio:
+// si la petición trae algo que no le corresponde, es un error de quien llama,
+// y borrar o transmitir "sólo una parte" es peor que rechazar.
+const assertOwnsReports = async (requester, reports) => {
+  for (const report of reports) {
+    const permitido = await checkPermissionsForClientResources(
+      requester,
+      report.well?.client
+    );
+    if (!permitido) {
+      throw new ErrorHandler(unauthorized);
+    }
+  }
+};
 
 /**
  * Normaliza un valor numérico que puede venir con coma como separador decimal
@@ -231,6 +249,7 @@ const repostAllReportsToDGA = async (req, res, next) => {
                                       {
                                         model: Well,
                                         as: 'well',
+                                        include: [{ model: Client, as: 'client' }],
                                       },
                                     ],
                                   });
@@ -242,6 +261,10 @@ const repostAllReportsToDGA = async (req, res, next) => {
         message: "No se encontraron reportes para enviar.",
       });
     }
+
+    // Mismo IDOR que en el borrado masivo: sin esto, cualquiera puede forzar el
+    // envío a la DGA de reportes de otro cliente enumerando ids.
+    await assertOwnsReports(req.user, reports);
 
     // Procesar los reportes en paralelo con concurrencia limitada
     const concurrencyLimit = 3; // Limitar la cantidad de envíos simultáneos
@@ -361,10 +384,26 @@ const bulkDeleteWellData = async (req, res, next) => {
       });
     }
 
+    // Los ids de reporte son autoincrementales, así que sin comprobar
+    // pertenencia basta con enumerar para borrar telemetría de cualquier
+    // cliente. Se resuelve el dueño de cada reporte antes de tocar nada.
+    const objetivos = await WellData.findAll({
+      where: { id: { [db.Op.in]: reportIds } },
+      include: [{ model: Well, as: "well", include: [{ model: Client, as: "client" }] }],
+    });
+
+    if (objetivos.length === 0) {
+      return res.status(404).send({
+        message: "No se encontraron reportes con los IDs proporcionados.",
+      });
+    }
+
+    await assertOwnsReports(req.user, objetivos);
+
     const deletedCount = await WellData.destroy({
       where: {
         id: {
-          [db.Op.in]: reportIds,
+          [db.Op.in]: objetivos.map((r) => r.id),
         },
       },
     });

@@ -18,6 +18,64 @@ const Company = db.company;
 const Distributor = db.distributor;
 const Role = db.role;
 
+// Control de destino para las creaciones de usuario. `checkPermissions` no
+// puede resolverlo: cuando se registra a alguien todavía no existe la entidad
+// contra la cual comparar pertenencia, así que lo que se valida es qué rol se
+// está creando y bajo qué empresa o distribuidora queda colgando.
+const assertCanCreateUserWithRole = async (requester, targetRole, body, transaction) => {
+  const { id: requesterId, type: requesterRole } = requester;
+
+  if (requesterRole === 'admin') {
+    return;
+  }
+
+  // Nadie que no sea admin puede fabricar un admin. Es el escalamiento directo.
+  if (targetRole === 'admin') {
+    throw new ErrorHandler(unauthorized);
+  }
+
+  if (requesterRole === 'company') {
+    // Una empresa sólo da de alta a sus propios clientes.
+    if (targetRole !== 'normal') {
+      throw new ErrorHandler(unauthorized);
+    }
+    const own = await Company.findOne({ where: { userId: requesterId }, transaction });
+    if (!own) {
+      throw new ErrorHandler(unauthorized);
+    }
+    if (body.companyId && parseInt(body.companyId, 10) !== own.id) {
+      throw new ErrorHandler(unauthorized);
+    }
+    return;
+  }
+
+  if (requesterRole === 'distributor') {
+    const own = await Distributor.findOne({ where: { userId: requesterId }, transaction });
+    if (!own) {
+      throw new ErrorHandler(unauthorized);
+    }
+    // Sus empresas, y los clientes que cuelguen de esas empresas.
+    if (targetRole === 'company') {
+      if (body.distributorId && parseInt(body.distributorId, 10) !== own.id) {
+        throw new ErrorHandler(unauthorized);
+      }
+      return;
+    }
+    if (targetRole === 'normal') {
+      if (!body.companyId) {
+        return;
+      }
+      const target = await Company.findByPk(parseInt(body.companyId, 10), { transaction });
+      if (!target || target.distributorId !== own.id) {
+        throw new ErrorHandler(unauthorized);
+      }
+      return;
+    }
+  }
+
+  throw new ErrorHandler(unauthorized);
+};
+
 //           GET USER DATA
 
 const getUsers = async (req, res, next) => {
@@ -93,7 +151,7 @@ const getUserInfoById = async (req, res, next) => {
     const client = await Client.findByPk(clientId);
     const userId = client.userId;
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -138,7 +196,7 @@ const registerUser = async (req, res, next) => {
 
   try {
     const { id: requesterId, type: requesterRole } = req.user;
-    if (!checkPermissionsForClientResources(req.user, undefined, true)) {
+    if (!await checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
     }
     delete req.body.id;
@@ -159,6 +217,12 @@ const registerUser = async (req, res, next) => {
     if (!role) {
       throw new ErrorHandler(userNotFound);
     }
+
+    // En una creación no hay entidad contra la cual comprobar pertenencia, así
+    // que el control es sobre el destino: a quién se está creando y bajo quién
+    // queda colgando. Sin esto, una empresa podría crearse un admin o meter un
+    // cliente bajo otra empresa.
+    await assertCanCreateUserWithRole(req.user, role.type, req.body, transaction);
 
     const user = await User.create(userParams, {
       transaction,
