@@ -221,6 +221,12 @@ const repostAllReportsToDGA = async (req, res, next) => {
                                         [db.Op.in]: reportIds,
                                       },
                                     },
+                                    // OJO: acá el pozo SÍ debe traer sus credenciales DGA, al
+                                    // revés que en fetchUnsentReports. Este `well` se pasa a
+                                    // processAndPostData, que hace parseRUT(data.rutEmpresa), y
+                                    // parseRUT revienta con undefined. Excluirlas "por
+                                    // consistencia" rompe el reenvío manual desde el portal.
+                                    // No se filtran porque esta respuesta no serializa el pozo.
                                     include: [
                                       {
                                         model: Well,
