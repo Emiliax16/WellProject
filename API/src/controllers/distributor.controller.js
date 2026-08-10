@@ -6,6 +6,7 @@ const {
   distributorNotFound,
   companyDoesntBelongToDistributor,
   distributorHasNoUserOrPersonAssociated,
+  unauthorized,
 } = require("../utils/errorcodes.util");
 
 const Company = db.company;
@@ -187,7 +188,7 @@ const editDistributor = async (req, res, next) => {
       throw new ErrorHandler(distributorHasNoUserOrPersonAssociated);
     }
 
-    if (!checkPermissionsForClientResources(req.user, distributor)) {
+    if (!await checkPermissionsForClientResources(req.user, distributor)) {
       throw new ErrorHandler(unauthorized);
     }
 

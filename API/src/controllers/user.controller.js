@@ -18,6 +18,70 @@ const Company = db.company;
 const Distributor = db.distributor;
 const Role = db.role;
 
+// Control de destino para las creaciones de usuario. `checkPermissions` no
+// puede resolverlo: cuando se registra a alguien todavía no existe la entidad
+// contra la cual comparar pertenencia, así que lo que se valida es qué rol se
+// está creando y bajo qué empresa o distribuidora queda colgando.
+// Devuelve la empresa bajo la cual debe quedar el cliente cuando el body no la
+// trae. Sin eso, una empresa que da de alta un cliente desde la vista general
+// del portal —donde `companyId` viaja como null— crearía un cliente huérfano y
+// perdería el acceso al cliente que acaba de crear.
+const assertCanCreateUserWithRole = async (requester, targetRole, body, transaction) => {
+  const { id: requesterId, type: requesterRole } = requester;
+
+  if (requesterRole === 'admin') {
+    return { companyIdPorDefecto: null };
+  }
+
+  // Nadie que no sea admin puede fabricar un admin. Es el escalamiento directo.
+  if (targetRole === 'admin') {
+    throw new ErrorHandler(unauthorized);
+  }
+
+  if (requesterRole === 'company') {
+    // Una empresa sólo da de alta a sus propios clientes.
+    if (targetRole !== 'normal') {
+      throw new ErrorHandler(unauthorized);
+    }
+    const own = await Company.findOne({ where: { userId: requesterId }, transaction });
+    if (!own) {
+      throw new ErrorHandler(unauthorized);
+    }
+    if (body.companyId && parseInt(body.companyId, 10) !== own.id) {
+      throw new ErrorHandler(unauthorized);
+    }
+    return { companyIdPorDefecto: own.id };
+  }
+
+  if (requesterRole === 'distributor') {
+    const own = await Distributor.findOne({ where: { userId: requesterId }, transaction });
+    if (!own) {
+      throw new ErrorHandler(unauthorized);
+    }
+    // Sus empresas, y los clientes que cuelguen de esas empresas.
+    if (targetRole === 'company') {
+      if (body.distributorId && parseInt(body.distributorId, 10) !== own.id) {
+        throw new ErrorHandler(unauthorized);
+      }
+      return { companyIdPorDefecto: null };
+    }
+    if (targetRole === 'normal') {
+      // Una distribuidora no tiene una empresa "propia" evidente, así que si no
+      // indica cuál, el cliente queda sin empresa igual que antes.
+      if (!body.companyId) {
+        return { companyIdPorDefecto: null };
+      }
+      const target = await Company.findByPk(parseInt(body.companyId, 10), { transaction });
+      if (!target || target.distributorId !== own.id) {
+        throw new ErrorHandler(unauthorized);
+      }
+      return { companyIdPorDefecto: null };
+    }
+  }
+
+  throw new ErrorHandler(unauthorized);
+};
+
 //           GET USER DATA
 
 const getUsers = async (req, res, next) => {
@@ -93,7 +157,7 @@ const getUserInfoById = async (req, res, next) => {
     const client = await Client.findByPk(clientId);
     const userId = client.userId;
 
-    if (!checkPermissionsForClientResources(req.user, client)) {
+    if (!await checkPermissionsForClientResources(req.user, client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -138,7 +202,7 @@ const registerUser = async (req, res, next) => {
 
   try {
     const { id: requesterId, type: requesterRole } = req.user;
-    if (!checkPermissionsForClientResources(req.user, undefined, true)) {
+    if (!await checkPermissionsForClientResources(req.user, undefined, true)) {
       throw new ErrorHandler(unauthorized);
     }
     delete req.body.id;
@@ -160,6 +224,14 @@ const registerUser = async (req, res, next) => {
       throw new ErrorHandler(userNotFound);
     }
 
+    // En una creación no hay entidad contra la cual comprobar pertenencia, así
+    // que el control es sobre el destino: a quién se está creando y bajo quién
+    // queda colgando. Sin esto, una empresa podría crearse un admin o meter un
+    // cliente bajo otra empresa.
+    const { companyIdPorDefecto } = await assertCanCreateUserWithRole(
+      req.user, role.type, req.body, transaction
+    );
+
     const user = await User.create(userParams, {
       transaction,
       individualHooks: true,
@@ -173,6 +245,9 @@ const registerUser = async (req, res, next) => {
       const clientParams = { userId: user.id };
       if (req.body.companyId) {
         clientParams.companyId = parseInt(req.body.companyId, 10);
+      } else if (companyIdPorDefecto) {
+        // El portal manda `companyId: null` al crear desde la vista general.
+        clientParams.companyId = companyIdPorDefecto;
       }
 
       createdClient = await Client.create(clientParams, { transaction });

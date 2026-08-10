@@ -1,9 +1,13 @@
 // user.test.js
 
 const { sequelize } = require('../../models');
+const { assertSafeToWipe } = require('../helpers/safe-database');
 
 describe('User model', () => {
   beforeAll(async () => {
+    // `sync({ force: true })` borra todas las tablas: se comprueba primero que
+    // la conexión apunte a una base de pruebas y no a desarrollo o producción.
+    assertSafeToWipe();
     await sequelize.sync({ force: true });
   });
 

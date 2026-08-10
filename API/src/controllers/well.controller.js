@@ -60,7 +60,7 @@ const getWellDataByWell = async (req, res) => {
   }
 }
 
-const activeOrDesactiveWell = async (req, res) => {
+const activeOrDesactiveWell = async (req, res, next) => {
   try {
     // Get well with full context for activity logging
     const well = await Well.findOne({
@@ -108,7 +108,10 @@ const activeOrDesactiveWell = async (req, res) => {
       });
     }
 
-    if (!checkPermissionsForClientResources(req.user, undefined, true)) {
+    // Se valida contra el cliente dueño del pozo, no contra `undefined`. Antes
+    // no se comprobaba pertenencia alguna, así que cualquier usuario podía
+    // desactivar el pozo de otro cliente y cortarle el reporte a la DGA.
+    if (!await checkPermissionsForClientResources(req.user, well.client)) {
       throw new ErrorHandler(unauthorized);
     }
 
@@ -160,9 +163,11 @@ const activeOrDesactiveWell = async (req, res) => {
 
     res.json(well);
   } catch (error) {
-    res.status(500).send({
-      message: error.message || 'Some error occurred while activating the Well'
-    });
+    // Se delega en el middleware de errores para que un fallo de autorización
+    // salga como 401 y no como 500. Antes todo caía en el mismo `catch` y el
+    // portal no podía distinguir "este pozo no es tuyo" de "el servidor se
+    // cayó".
+    next(error);
   }
 }
 
