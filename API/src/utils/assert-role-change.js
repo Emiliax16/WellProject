@@ -18,11 +18,27 @@ const assertCanChangeRole = (requester, targetUser, body) => {
   }
 
   // El body llega como JSON y el selector del portal manda strings.
-  const solicitado = parseInt(body.roleId, 10);
+  //
+  // Se usa Number y no parseInt: parseInt lee un prefijo y descarta el resto,
+  // así que `parseInt('2_0')` da 2 y la comprobación creería que el rol no
+  // cambia. Postgres, en cambio, castea `'2_0'::integer` a 20 —admite el guion
+  // bajo como separador de dígitos desde la versión 16—, así que se escribiría
+  // un rol distinto del que se validó. Number rechaza esas cadenas enteras.
+  const solicitado = Number(body.roleId);
 
-  if (Number.isNaN(solicitado)) {
+  // Number('') es 0 y Number([1]) es 1, así que no basta con Number.isInteger:
+  // se exige que el valor original sea un número o una cadena numérica.
+  const esEntero =
+    Number.isInteger(solicitado) &&
+    (typeof body.roleId === 'number' || typeof body.roleId === 'string');
+
+  if (!esEntero) {
     throw new ErrorHandler(unauthorized);
   }
+
+  // Se normaliza el body para que lo que se persista sea exactamente el valor
+  // que se acaba de validar, y no la cadena cruda que Postgres reinterpretaría.
+  body.roleId = solicitado;
 
   if (solicitado === targetUser.roleId) {
     return;
