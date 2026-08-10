@@ -15,10 +15,18 @@ const server = app.listen(PORT, () => {
 // hasta 12 s a la DGA, y `POST /repostAllReportsToDGA` reenvía lotes de a 3 en
 // paralelo, así que puede tardar minutos. Un tope de request cortaría envíos
 // reales al regulador.
+
+// Cierra las conexiones keep-alive ociosas y acota la fase de recepción de
+// cabeceras. `headersTimeout` va por encima de `keepAliveTimeout` para evitar
+// la condición de carrera que Node documenta entre ambos.
 //
-// Los timeouts de conexiones ociosas (`keepAliveTimeout`, `headersTimeout`) van
-// aparte, porque hay que contrastarlos con la configuración de Nginx antes de
-// aplicarlos.
+// ⚠️ El valor tiene que ser MAYOR que el timeout con el que Nginx mantiene sus
+// conexiones hacia el backend. Si fuera menor, Nginx podría reutilizar una
+// conexión que Node acaba de cerrar y el usuario recibiría un 502 intermitente.
+// Sólo aplica si el sitio define un `upstream` con la directiva `keepalive`;
+// sin ella, Nginx abre una conexión por petición y esto es indiferente.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
 
 const registrarFatal = (tipo, error) => {
     console.error(JSON.stringify({
