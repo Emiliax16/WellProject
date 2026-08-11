@@ -22,11 +22,16 @@ RUN bundle install
 COPY . .
 
 # Crear usuario de Rails y asignar permisos.
-# El `chmod +x` es una red de seguridad: el CMD invoca `./bin/rails`, y si esos
-# archivos llegan sin bit de ejecucion el contenedor muere al arrancar con
-# `exec: "./bin/rails": permission denied`. Paso en produccion el 10 de agosto
-# de 2026. El repo ya los tiene como 100755, pero un checkout con
-# core.fileMode=false volveria a perderlo sin que nadie lo note.
+#
+# El `chmod +x` cubre el caso de construir la imagen sin bind mount. El arreglo
+# de verdad esta en el indice de git: los archivos de bin/ pasan a 100755 en
+# este mismo commit. Se aclara porque en este despliegue esta linea NO se
+# ejecuta sobre lo que corre: el docker-compose monta ./SENDER/wellproject en
+# /rails, asi que el contenedor usa los archivos del host y no los de la imagen.
+#
+# El CMD invoca `./bin/rails`, y sin bit de ejecucion el contenedor muere al
+# arrancar con `exec: "./bin/rails": permission denied`. Paso en produccion el
+# 10 de agosto de 2026.
 RUN chmod +x bin/* && \
     useradd -ms /bin/bash rails && chown -R rails:rails /rails
 USER rails:rails
