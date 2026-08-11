@@ -1,7 +1,8 @@
 //well.controller.js
 const checkPermissionsForClientResources = require('../utils/check-permissions');
 const ErrorHandler = require('../utils/error.util');
-const { unauthorized } = require('../utils/errorcodes.util');
+const { unauthorized, clientNotFound } = require('../utils/errorcodes.util');
+const soloCampos = require('../utils/only-fields.util');
 const activityLogService = require('../services/activityLog.service');
 const db = require('../../models')
 
@@ -32,10 +33,40 @@ const getAllWells = async (req, res, next) => {
   }
 }
 
+// Los mismos campos que acepta la creación desde `/clients/:id/wells/create`.
+// Fuera queda `editStatusDate`, que fija el controlador de activación y sobre la
+// que pivotea `fetchUnsentReports`: escribirla a futuro deja los envíos
+// fallidos de ese pozo sin reintentar jamás.
+//
+// Ojo, esto no cierra el problema entero: crear un pozo con `isActived: true`
+// lo deja activo y con `editStatusDate` en null, y `fetchUnsentReports` exige
+// que no sea null, así que sus envíos fallidos tampoco se reintentan. Es el
+// issue #69, y viene igual desde `/clients/:id/wells/create`.
+const CAMPOS_CREABLES_WELL = [
+  'name', 'location', 'code', 'isActived', 'rutEmpresa', 'rutUsuario', 'password',
+];
+
 const createWell = async (req, res, next) => {
-  try { 
-    const well = await Well.create(req.body)
-    res.json({created: well})
+  try {
+    // El `clientId` viene del body y decide de quién es el pozo, así que hay
+    // que comprobar que quien llama pueda operar sobre ese cliente. Sin esto,
+    // cualquier usuario autenticado podía crear un pozo sobre la cuenta de otro
+    // —y fijarle `editStatusDate`—, que es la misma vía que cierra el #81 en
+    // `/clients/:id/wells/create`, por otra puerta.
+    const client = await Client.findByPk(req.body.clientId);
+    if (!client) {
+      throw new ErrorHandler(clientNotFound);
+    }
+
+    if (!await checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
+    }
+
+    const well = await Well.create({
+      ...soloCampos(req.body, CAMPOS_CREABLES_WELL),
+      clientId: client.id,
+    });
+    res.json({ created: well })
   } catch (error) {
     next(error);
   }
