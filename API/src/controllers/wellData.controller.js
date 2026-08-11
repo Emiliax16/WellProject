@@ -7,6 +7,7 @@ const Client = db.client;
 const processAndPostData = require("../services/wellData/handleSendData.service");
 const ErrorHandler = require("../utils/error.util");
 const checkPermissionsForClientResources = require("../utils/check-permissions");
+const getPaginationParameters = require("../utils/query-params.util");
 const moment = require("moment-timezone");
 const { bulkCreateWellDataIsNotArray, unauthorized } = require("../utils/errorcodes.util");
 
@@ -330,22 +331,63 @@ const repostToDGA = async (req, res, next) => {
   }
 };
 
+// Ventana de reintento. Un reporte que lleva más de tres días sin enviarse ya
+// no se reintenta: la DGA lo rechazaría por duplicado o por antigüedad, y
+// arrastrar la cola histórica es lo que hizo crecer esta consulta sin techo.
+// Decidido con el cliente el 11 de agosto de 2026: la cola anterior se da por
+// perdida.
+const DIAS_DE_VENTANA = 3;
+
+// Tope de reportes por respuesta. Sin él, esta consulta materializaba en memoria
+// los 57.977 reportes pendientes: el 10 de agosto de 2026 Node pidió 11,5 GB en
+// una instancia de 957 MB, el OOM killer lo mató y la máquina quedó inaccesible
+// 14 horas. Ver el postmortem en `errores/06-caida-2026-08-10...`.
+const TAMANO_PAGINA_POR_DEFECTO = 100;
+const TAMANO_PAGINA_MAXIMO = 500;
+
 const fetchUnsentReports = async (req, res, next) => {
   try {
-    // Se obtienen todos los reportes no mandados de pozos activos
-    console.log("Buscando reportes no enviados");
+    const ahora = moment().tz("America/Santiago");
+    // `createdAt <= ahora - 2h` da margen a que el envío automático del hook
+    // `afterCreate` haya tenido su oportunidad antes de reintentar.
+    const hasta = ahora.clone().subtract(2, "hours").toDate();
+    const desde = ahora.clone().subtract(DIAS_DE_VENTANA, "days").toDate();
 
-    // Obtener fecha actual en zona horaria correcta (Chile) y restar 2 horas
-    const twoHoursAgo = moment().tz("America/Santiago").subtract(2, "hours").toDate();
+    // El tamaño se acota siempre, incluso si quien llama pide más: el objetivo
+    // es que ninguna petición pueda volver a tumbar la instancia. Se acota por
+    // arriba y por abajo: un `size` o un `page` negativos generan un `LIMIT` o
+    // un `OFFSET` negativos, que Postgres rechaza.
+    // Se usa `Number` y no `parseInt` por el mismo motivo que en
+    // `assert-role-change.js`: `parseInt` lee un prefijo y descarta el resto,
+    // así que `'1.5'` daría 1 y `'5x'` daría 5. Acá eso convertiría una entrada
+    // inválida en una página de tamaño 1 en vez de caer al valor por defecto.
+    const enRango = (valor, porDefecto, minimo, maximo) => {
+      if (valor === undefined || valor === null || valor === '') {
+        return porDefecto;
+      }
+      const n = Number(valor);
+      if (!Number.isInteger(n) || n < minimo) {
+        return porDefecto;
+      }
+      return Math.min(n, maximo);
+    };
 
-    const unsentReports = await WellData.findAll({
+    const { limit, offset } = getPaginationParameters({
+      size: enRango(req.query.size, TAMANO_PAGINA_POR_DEFECTO, 1, TAMANO_PAGINA_MAXIMO),
+      page: enRango(req.query.page, 0, 0, Number.MAX_SAFE_INTEGER),
+    });
+
+    const { count, rows: unsentReports } = await WellData.findAndCountAll({
       where: {
         sent: false,
         createdAt: {
-          // solo incluir reportes creados después de la última edición del pozo
+          // Sólo reportes creados después de la última edición del pozo.
           [db.Op.gte]: db.Sequelize.col("well.editStatusDate"),
-          [db.Op.lte]: twoHoursAgo, // createdAt debe ser <= ahora - 2h
+          [db.Op.lte]: hasta,
         },
+        // La ventana va en su propia condición porque `createdAt` ya tiene un
+        // `gte` contra la columna del pozo y un mismo objeto no admite dos.
+        [db.Op.and]: [{ createdAt: { [db.Op.gte]: desde } }],
       },
       include: [
         {
@@ -363,22 +405,44 @@ const fetchUnsentReports = async (req, res, next) => {
           },
         },
       ],
+      // Sin un orden estable, paginar es incorrecto: entre una página y la
+      // siguiente el motor puede devolver las filas en otro orden y quedarían
+      // reportes repetidos y otros nunca entregados. Se ordena por antigüedad,
+      // que además es el orden en que conviene reintentar.
+      order: [["createdAt", "ASC"], ["id", "ASC"]],
+      limit,
+      offset,
     });
 
-    // Si no hay reportes no enviados, se envía un 404
+    // Si no hay reportes no enviados, se envía un 404. El SENDER depende de
+    // esto: trata cualquier respuesta no exitosa como "no hay nada que hacer".
     if (unsentReports.length === 0) {
-      console.log("NO HAY REPORTES NO ENVIADOS!!!!!!!!!!!!!!!!");
       return res.status(404).send({
         message: "No hay reportes no enviados",
       });
     }
 
-    console.log("Reportes encontrados: ", unsentReports.length);
-    let formattedReports = { reports: {} };
+    console.log(
+      `[sender] entregando ${unsentReports.length} de ${count} reportes pendientes ` +
+      `de los últimos ${DIAS_DE_VENTANA} días (offset ${offset})`
+    );
+
+    // Se conserva la forma `{ reports: { id: reporte } }` porque es lo que el
+    // SENDER consume (`json_response['reports'].values`). La paginación se
+    // agrega como clave aparte para no romper ese contrato.
+    const formattedReports = { reports: {} };
     unsentReports.forEach((report) => {
-      formattedReports["reports"][report.id] = report;
+      formattedReports.reports[report.id] = report;
     });
-    res.json(formattedReports).status(200);
+    formattedReports.pagination = {
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: Math.floor(offset / limit),
+      pageSize: limit,
+      windowDays: DIAS_DE_VENTANA,
+    };
+
+    res.status(200).json(formattedReports);
   } catch (error) {
     next(error);
   }
