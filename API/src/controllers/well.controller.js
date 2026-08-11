@@ -37,6 +37,11 @@ const getAllWells = async (req, res, next) => {
 // Fuera queda `editStatusDate`, que fija el controlador de activación y sobre la
 // que pivotea `fetchUnsentReports`: escribirla a futuro deja los envíos
 // fallidos de ese pozo sin reintentar jamás.
+//
+// Ojo, esto no cierra el problema entero: crear un pozo con `isActived: true`
+// lo deja activo y con `editStatusDate` en null, y `fetchUnsentReports` exige
+// que no sea null, así que sus envíos fallidos tampoco se reintentan. Es el
+// issue #69, y viene igual desde `/clients/:id/wells/create`.
 const CAMPOS_CREABLES_WELL = [
   'name', 'location', 'code', 'isActived', 'rutEmpresa', 'rutUsuario', 'password',
 ];
