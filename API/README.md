@@ -17,6 +17,30 @@ El proyecto se basa en la creación de una aplicación que permita gestionar dif
 - Instancia de Amazon
   - [Navegación y comandos](documentations/amazon-instance.md)
 
+## Tests
+
+```bash
+npm test          # la suite completa salvo tests/models
+npm run test:models   # sólo tests/models: BORRA la base configurada
+```
+
+`npm test` excluye `tests/models` a propósito. Esos tests hacen
+`sequelize.sync({ force: true })`, así que borran y recrean todas las tablas de
+la base que apunte el `.env` en ese momento. El resto de la suite no toca la
+base: mockea los modelos, y `server.test.js` bloquea axios antes de cargar nada
+para que ningún camino pueda transmitir a la DGA.
+
+Antes, `npm test` corría todo y el filtro dependía de que quien lo ejecutara se
+acordara de escribirlo. Correrlo con el `.env` de desarrollo apuntando a una
+base con datos era suficiente para perderlos.
+
+`tests/helpers/safe-database.js` sigue siendo la última barrera de
+`test:models`, pero es una comprobación de nombre de base, no una garantía.
+
+**El CI corre `npm test` en cada PR que toque `API/`.** Está en
+`.github/workflows/ci.yml` y no necesita ni Postgres ni secretos, justamente
+porque la suite que corre no depende de ninguno de los dos.
+
 ## Endpoints sin autenticación
 
 El resto de la API exige un token válido, que el middleware acepta tanto en el

@@ -16,5 +16,3 @@ Thumbs.db
 
 docker-compose.override.yml
 *.log
-
-package-lock.json
