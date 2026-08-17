@@ -3,6 +3,7 @@ const ErrorHandler = require('../utils/error.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
 const assertCanChangeRole = require('../utils/assert-role-change');
 const soloCampos = require('../utils/only-fields.util');
+const { respuestaDePozo } = require('../utils/well-response.util');
 
 // Lo único que se puede escribir en un pozo desde el portal.
 //
@@ -174,6 +175,13 @@ const getOneWell = async (req, res, next) => {
       throw new ErrorHandler(wellNotFound);
     }
 
+    // Devuelve las credenciales DGA a propósito: es la ruta que alimenta el
+    // formulario de edición del portal, y `wellForm.js` rellena `rutEmpresa` y
+    // `rutUsuario` con `defaultValue` desde esta respuesta.
+    //
+    // `password` es distinto: el formulario lo registra sin `defaultValue`, o
+    // sea que nunca lo usa, y sale igual. Quitarlo es el issue #91, que va
+    // aparte porque el mismo hilo esconde un problema peor.
     res.json(well);
   } catch (error) {
     next(error);
@@ -446,7 +454,11 @@ const createClientWell = async (req, res, next) => {
       console.error('Error creating activity log:', logError);
     }
 
-    res.json(well);
+    // A diferencia del GET de un pozo, acá el portal no lee el cuerpo:
+    // `wellForm.js` hace `await postNewWell(...)` y navega a la lista. Así que
+    // la creación no tiene por qué devolver de vuelta las credenciales que
+    // acaba de recibir.
+    res.json(respuestaDePozo(well));
   } catch (error) {
     next(error);
   }

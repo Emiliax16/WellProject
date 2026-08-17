@@ -3,6 +3,7 @@ const checkPermissionsForClientResources = require('../utils/check-permissions')
 const ErrorHandler = require('../utils/error.util');
 const { unauthorized, clientNotFound } = require('../utils/errorcodes.util');
 const soloCampos = require('../utils/only-fields.util');
+const { respuestaDePozo, CAMPOS_PUBLICOS_WELL } = require('../utils/well-response.util');
 const activityLogService = require('../services/activityLog.service');
 const db = require('../../models')
 
@@ -17,12 +18,12 @@ const Person = db.person;
 //  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
 const getAllWells = async (req, res, next) => {
   try {
-    // Este listado es global y no filtra por cliente, así que no carga las
-    // credenciales DGA. Los listados por cliente (/clients/:id/wells) sí las
-    // devuelven, porque el formulario de edición del portal las necesita.
-    const wells = await Well.findAll({
-      attributes: { exclude: ['password', 'rutEmpresa', 'rutUsuario'] }
-    });
+    // Este listado es global, no filtra por cliente y no exige sesión, así que
+    // pide explícitamente las columnas que puede publicar en vez de excluir las
+    // tres sensibles. Con una lista de exclusiones, la próxima columna que
+    // alguien agregue al modelo saldría publicada sin que nadie toque este
+    // archivo, y acá eso sería sin siquiera pedir token.
+    const wells = await Well.findAll({ attributes: CAMPOS_PUBLICOS_WELL });
     res.json(wells);
   } catch (error) {
     // Se delega en el middleware de errores. Respondiendo acá con
@@ -66,7 +67,10 @@ const createWell = async (req, res, next) => {
       ...soloCampos(req.body, CAMPOS_CREABLES_WELL),
       clientId: client.id,
     });
-    res.json({ created: well })
+    // Se devuelven sólo los campos públicos: el pozo recién creado trae las
+    // credenciales DGA que vinieron en el body, y no hay razón para devolverlas
+    // de vuelta. Se guardan igual.
+    res.json({ created: respuestaDePozo(well) })
   } catch (error) {
     next(error);
   }
@@ -189,7 +193,16 @@ const activeOrDesactiveWell = async (req, res, next) => {
       console.error('Error creating activity log:', logError);
     }
 
-    res.json(well);
+    // El pozo se cargó con el árbol de cliente, empresa y distribuidora para
+    // armar el registro de actividad de más arriba. Ese árbol no es para el
+    // consumidor: ninguno de esos `include` excluye atributos, así que devolver
+    // el modelo entero entregaba el `encrypted_password` de los tres usuarios,
+    // más las credenciales DGA del pozo, a cualquiera que activara un pozo.
+    //
+    // El portal ignora este cuerpo —`wellServices.js` hace `await
+    // activateWell(...)` y después refresca la lista—, así que acotarlo no le
+    // quita nada.
+    res.json(respuestaDePozo(well));
   } catch (error) {
     // Se delega en el middleware de errores para que un fallo de autorización
     // salga como 401 y no como 500. Antes todo caía en el mismo `catch` y el
