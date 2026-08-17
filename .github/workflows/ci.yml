@@ -1,0 +1,52 @@
+name: CI
+
+# El proyecto se despliega a mano y no tiene ninguna otra automatización: esta
+# es la única barrera entre un PR y `master`. Corre sólo cuando cambia la API,
+# para no gastar minutos en cambios de documentación o del SENDER.
+on:
+  pull_request:
+    paths:
+      - 'API/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'API/**'
+      - '.github/workflows/ci.yml'
+
+# Un push nuevo sobre la misma rama cancela la corrida anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests de la API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: API
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 21 es la versión que corre en producción (`NODE_VERSION=21-alpine`
+      # en docker-compose.yml). Si cambia allá, cambiar acá.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '21'
+          cache: npm
+          cache-dependency-path: API/package-lock.json
+
+      # `npm ci` y no `npm install`: instala exactamente lo del lockfile y falla
+      # si package.json y el lockfile se desincronizan.
+      - run: npm ci
+
+      # `npm test` excluye `tests/models` a propósito: esos tests hacen
+      # `sequelize.sync({ force: true })` y borran la base. En CI no hay ninguna
+      # base levantada, así que además fallarían.
+      #
+      # El resto no necesita ni Postgres ni secretos: mockean los modelos, y
+      # `server.test.js` bloquea axios antes de cargar nada para que ningún
+      # camino pueda transmitir a la DGA desde el runner.
+      - run: npm test
