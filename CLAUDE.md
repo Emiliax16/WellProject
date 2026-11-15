@@ -840,7 +840,7 @@ EMAIL_PASS=your_app_password
 
 # Alertas de monitoreo de pozos
 ALERT_EMAIL_TO=destino@example.com
-ALERT_CRON_SCHEDULE=0 */6 * * *
+ALERT_CRON_SCHEDULE=0 8 * * *    # una vez al día; la alerta asume chequeos cada 24 h
 CRON_TIMEZONE=America/Santiago
 
 # Clave compartida con el SENDER (mínimo 32 caracteres: openssl rand -hex 32)
