@@ -132,7 +132,6 @@ const getWellsStatus = async (req, res) => {
     console.error('Error fetching wells status:', error);
     return res.status(500).json({
       message: 'Error al obtener el estado de los pozos',
-      error: error.message,
     });
   }
 };
@@ -301,7 +300,6 @@ const sendAlertEmail = async (req, res) => {
     console.error('Error sending alert email:', error);
     return res.status(500).json({
       message: 'Error al enviar correo de alerta',
-      error: error.message,
     });
   }
 };

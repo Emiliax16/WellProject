@@ -116,6 +116,11 @@ const distributorHasNoUserOrPersonAssociated = {
   message: "La distribuidora no tiene un usuario o persona asociada",
 };
 
+const invalidClientId = {
+  code: 400,
+  message: "El cliente indicado no es válido.",
+};
+
 const invalidCredentials = {
   code: 401,
   message: "Correo o contraseña incorrectos.",
@@ -132,6 +137,7 @@ const invalidInternalKey = {
 };
 
 module.exports = {
+  invalidClientId,
   invalidCredentials,
   tooManyLoginAttempts,
   invalidInternalKey,

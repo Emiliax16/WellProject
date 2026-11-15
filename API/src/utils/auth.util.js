@@ -17,10 +17,11 @@ async function generateToken(user) {
 
 function decodeToken(token) {
   try {
-    console.log("checking")
     return jwt.verify(token, JWT_SECRET);
   } catch (error) {
-    console.error('Error decoding token:', error);
+    // Un token vencido o inválido es algo normal, no un error del servidor: se
+    // registra en una línea, sin el stack, para no llenar el log.
+    console.warn(`[auth] token rechazado: ${error.name}`);
     return null;
   }
 }

@@ -18,7 +18,6 @@ const {
   AdminAndCompanyAndDistributor,
   AllRoles
 } = require('../utils/allowed-roles.util');
-console.log(...AdminAndCompany);
 const router = express.Router();
 
 router.get('/users', authMiddleware(...Admin), getUsers);
