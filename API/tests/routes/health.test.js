@@ -29,6 +29,7 @@ const consultar = async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  router._reiniciar();
 });
 
 afterEach(() => {
@@ -63,6 +64,34 @@ describe('GET /health', () => {
     jest.advanceTimersByTime(3000);
     const res = await pendiente;
 
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('comparte una sola consulta entre llamadas simultáneas', async () => {
+    let resolver;
+    mockAuthenticate.mockReturnValue(new Promise((r) => { resolver = r; }));
+
+    const pendientes = [consultar(), consultar(), consultar()];
+    resolver();
+    const respuestas = await Promise.all(pendientes);
+
+    expect(mockAuthenticate).toHaveBeenCalledTimes(1);
+    expect(respuestas.map((r) => r.statusCode)).toEqual([200, 200, 200]);
+  });
+
+  it('reutiliza el resultado por unos segundos y después vuelve a consultar', async () => {
+    jest.useFakeTimers();
+    mockAuthenticate.mockResolvedValue();
+
+    await consultar();
+    await consultar();
+    expect(mockAuthenticate).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(5000);
+    mockAuthenticate.mockRejectedValue(new Error('caída'));
+    const res = await consultar();
+
+    expect(mockAuthenticate).toHaveBeenCalledTimes(2);
     expect(res.statusCode).toBe(503);
   });
 

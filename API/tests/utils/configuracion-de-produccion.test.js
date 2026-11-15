@@ -11,6 +11,14 @@ describe('package.json', () => {
     expect(paquete.scripts.start).toBe('node src/server.js');
   });
 
+  it('el contenedor api corre node directo, no nodemon ni npm', () => {
+    const compose = require('fs').readFileSync(require.resolve('../../../docker-compose.yml'), 'utf8');
+
+    expect(compose).toContain('command: ["node", "src/server.js"]');
+    expect(compose).toContain('init: true');
+    expect(compose).not.toMatch(/command:.*nodemon|command:.*"dev"/);
+  });
+
   it.each(['sequelize', 'pg', 'pg-hstore', 'moment-timezone'])(
     'declara %s como dependencia de runtime',
     (nombre) => {
@@ -21,10 +29,12 @@ describe('package.json', () => {
 });
 
 describe('config/config.js', () => {
+  // Se fija la variable (vacía por defecto) en vez de borrarla: `config.js`
+  // carga `dotenv`, que no pisa una variable existente, así que un
+  // `DB_LOGGING=true` en el `.env` local no altera el resultado.
   const cargar = (valor) => {
     jest.resetModules();
-    if (valor === undefined) delete process.env.DB_LOGGING;
-    else process.env.DB_LOGGING = valor;
+    process.env.DB_LOGGING = valor ?? '';
     return require('../../config/config');
   };
 

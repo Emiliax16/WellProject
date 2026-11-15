@@ -19,7 +19,7 @@ El proyecto se basa en la creación de una aplicación que permita gestionar dif
 
 ## Ejecución
 
-En producción la API corre con `npm start`, es decir, `node src/server.js`. Si el proceso termina por un error, el contenedor se detiene y Docker lo levanta de nuevo. `GET /health` responde 200 si la API y la base están disponibles.
+En producción el contenedor corre `node src/server.js` (lo mismo que `npm start`). Si el proceso termina por un error, el contenedor se detiene y Docker lo levanta de nuevo. `GET /health` responde 200 si la API y la base están disponibles.
 
 Para desarrollo con recarga automática se usa `npm run dev` (nodemon). Con docker-compose, se puede crear en la raíz del repo un `docker-compose.override.yml`, que está en `.gitignore` y que Compose combina solo si existe:
 

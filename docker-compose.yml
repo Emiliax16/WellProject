@@ -21,12 +21,20 @@ services:
     # Producción corre con `node`, no con nodemon: si el proceso termina por un
     # error, el contenedor se detiene y Docker lo levanta de nuevo
     # (`restart: unless-stopped`). Con nodemon el contenedor seguía figurando
-    # `Up` con la API caída. Para desarrollo con recarga automática, ver
+    # `Up` con la API caída. Se llama a `node` directo, sin `npm start`, para que
+    # sea el PID 1 y no sumar el proceso de npm (unos 60 MB en una instancia de
+    # menos de 1 GB). Para desarrollo con recarga automática, ver
     # `docker-compose.override.yml` en API/README.md.
-    command: ["npm", "start"]
-    # Al reiniciar o desplegar, `server.js` espera hasta 10 s a que terminen las
-    # peticiones en curso, y un envío a la DGA puede tardar hasta 12 s. Con el
-    # margen común de 3 s, Docker los cortaba con SIGKILL.
+    command: ["node", "src/server.js"]
+    # Pone un init mínimo (tini) como PID 1 que reenvía las señales a node. Sin
+    # él, un SIGTERM que llega mientras node todavía carga (antes de registrar su
+    # manejador) se ignora, porque el PID 1 no tiene acción por defecto, y Docker
+    # termina matándolo a los 15 s.
+    init: true
+    # Al reiniciar o desplegar, `server.js` espera hasta 13 s a que terminen las
+    # peticiones en curso (un envío a la DGA puede tardar hasta 12 s). Con el
+    # margen común de 3 s, Docker los cortaba con SIGKILL. Ojo: en
+    # docker-compose 2.17, `restart` usa 10 s salvo que se le pase `-t 15`.
     stop_grace_period: 15s
     healthcheck:
       # Solo informa el estado en `docker ps`: en Compose, un contenedor

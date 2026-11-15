@@ -63,8 +63,10 @@ process.on('unhandledRejection', (reason) => {
 const apagar = (senal) => {
     console.log(JSON.stringify({ level: 'info', msg: `${senal} recibido, cerrando` }));
     server.close(() => process.exit(0));
-    // Si alguna conexión no cierra, no quedarse colgado para siempre.
-    setTimeout(() => process.exit(1), 10_000).unref();
+    // Si alguna conexión no cierra, no quedarse colgado para siempre. 13 s
+    // cubren un envío a la DGA (hasta 12 s) y quedan por debajo de los 15 s que
+    // Docker espera antes de forzar el cierre (`stop_grace_period` de `api`).
+    setTimeout(() => process.exit(1), 13_000).unref();
 };
 
 process.on('SIGTERM', () => apagar('SIGTERM'));
