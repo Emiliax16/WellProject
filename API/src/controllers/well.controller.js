@@ -84,6 +84,13 @@ const getWellDataByWell = async (req, res, next) => {
         message: 'Well not found'
       });
     }
+    // El pozo se resuelve por id, sin pasar por el cliente, así que hay que
+    // comprobar la pertenencia acá: sin esto, cualquier usuario con sesión leía
+    // la telemetría de cualquier pozo.
+    const client = await Client.findByPk(well.clientId);
+    if (!await checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
+    }
     //console.log(well.__proto__) -> para conocer los métodos que se pueden usar
     const wellDataInfo = await well.getWellData()
     res.json(wellDataInfo)

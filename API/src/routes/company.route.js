@@ -19,8 +19,8 @@ const router = express.Router();
 router.get('/companies', authMiddleware(...AdminAndCompanyAndDistributor), getAllCompanies);
 router.get('/companies/:id', authMiddleware(...AdminAndCompanyAndDistributor), getCompanyInfo);
 router.get('/companies/:id/clients', authMiddleware(...AdminAndCompany), getAllCompanyClients);
-router.post('/companies/:id/clients/:clientId', authMiddleware(...AdminAndCompany), addClientToCompany);
-router.delete('/companies/:id/clients/:clientId', authMiddleware(...AdminAndCompany), removeClientFromCompany);
+router.post('/companies/:id/clients/:clientId', authMiddleware(...Admin), addClientToCompany);
+router.delete('/companies/:id/clients/:clientId', authMiddleware(...Admin), removeClientFromCompany);
 router.delete('/companies/:id/delete', authMiddleware(...Admin), deleteCompany);
 router.put('/companies/:id/edit', authMiddleware(...AdminAndCompanyAndDistributor), editCompany);
 

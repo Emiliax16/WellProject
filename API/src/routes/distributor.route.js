@@ -24,12 +24,12 @@ router.get(
 );
 router.post(
   "/distributors/:id/companies/:companyId",
-  authMiddleware("admin", "distributor"),
+  authMiddleware("admin"),
   addCompanyToDistributor
 );
 router.delete(
   "/distributors/:id/companies/:companyId",
-  authMiddleware("admin", "distributor"),
+  authMiddleware("admin"),
   removeCompanyFromDistributor
 );
 router.delete(

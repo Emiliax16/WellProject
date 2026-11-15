@@ -18,6 +18,13 @@ const { respuestaDePozo } = require('../utils/well-response.util');
 const CAMPOS_EDITABLES_WELL = [
   'name', 'location', 'code', 'isActived', 'rutEmpresa', 'rutUsuario', 'password',
 ];
+
+// Lo único que se puede escribir al agregar una medición a mano. Fuera quedan
+// `sent` y `sentDate`, que marcarían el reporte como enviado a la DGA sin
+// haberlo enviado, e `id`. `code` lo fija el controlador desde el pozo.
+const CAMPOS_CREABLES_WELL_DATA = [
+  'date', 'realDate', 'hour', 'totalizador', 'caudal', 'nivel_freatico',
+];
 const {
   unauthorized,
   userHasNoClientAssociated,
@@ -39,10 +46,37 @@ const Company = db.company;
 const Distributor = db.distributor;
 
 
+// El listado se acota al alcance de quien consulta en vez de rechazar: un admin
+// sigue viendo todos los clientes, una empresa sólo los suyos y un cliente sólo
+// a sí mismo. Antes cualquier empresa o cliente recibía la lista completa, con
+// usuario y datos personales.
+//
+// Devuelve `null` cuando quien consulta no tiene clientes a su cargo. Ojo con
+// resolverlo como `{ companyId: null }`: ese filtro trae justamente todos los
+// clientes sin empresa.
+const alcanceDeClientes = async (user) => {
+  if (user.type === 'admin') {
+    return {};
+  }
+  if (user.type === 'company') {
+    const company = await Company.findOne({ where: { userId: user.id } });
+    return company ? { companyId: company.id } : null;
+  }
+  if (user.type === 'normal') {
+    return { userId: user.id };
+  }
+  return null;
+}
+
 //               GET ALL CLIENTS
 const getAllClients = async (req, res, next) => {
   try {
+    const alcance = await alcanceDeClientes(req.user);
+    if (!alcance) {
+      return res.json([]);
+    }
     const clients = await Client.findAll({
+      where: alcance,
       include: [
         {
           model: User,
@@ -474,11 +508,20 @@ const addDataToClientWell = async (req, res, next) => {
     if (!client) {
       throw new ErrorHandler(clientNotFound);
     }
+    // Sin esta validación, cualquier usuario con sesión podía agregar
+    // mediciones a un pozo ajeno, y si el pozo estaba activo el hook
+    // `afterCreate` las enviaba a la DGA con las credenciales de ese pozo.
+    if (!await checkPermissionsForClientResources(req.user, client)) {
+      throw new ErrorHandler(unauthorized);
+    }
     const well = await Well.findOne({ where: { code: wellCode, clientId: client.id } });
     if (!well) {
       throw new ErrorHandler(wellNotFound);
     }
-    const wellData = await WellData.create({ ...req.body, code: well.code });
+    const wellData = await WellData.create({
+      ...soloCampos(req.body, CAMPOS_CREABLES_WELL_DATA),
+      code: well.code,
+    });
     res.json(wellData);
   } catch (error) {
     next(error);
