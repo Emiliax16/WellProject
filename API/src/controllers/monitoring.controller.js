@@ -26,8 +26,12 @@ const RED_THRESHOLD_MINUTES = 360;
 // ALERT_CRON_SCHEDULE (por defecto, un chequeo diario).
 //
 // El margen cubre el desfase de segundos del cron y los días de cambio de
-// horario, que duran 23 o 25 horas: con él nunca se pierde un aviso, y a lo
-// sumo un pozo aparece como nuevo dos días seguidos.
+// horario, que duran 23 o 25 horas. A cambio, un pozo puede aparecer como nuevo
+// dos días seguidos. El día de 25 horas el margen queda justo, y un desfase de
+// segundos del cron podría dejar sin aviso a un pozo que cayó en ese instante.
+//
+// Una caída que empieza y termina entre dos chequeos no se avisa: el chequeo
+// solo ve el estado del momento.
 const ALERT_WINDOW_MINUTES = 24 * 60;
 const ALERT_MARGIN_MINUTES = 60;
 
@@ -170,19 +174,22 @@ const computeStatus = async () => {
 };
 
 // Un pozo en rojo es nuevo si cruzó el umbral dentro de la ventana del último
-// chequeo. Si nunca reportó, se mide desde que se activó; si tampoco hay fecha
-// de activación, no hay forma de saber cuándo pasó a rojo y se trata como
-// conocido para no repetirlo todos los días.
+// chequeo. El tiempo se mide desde lo más reciente entre su último reporte y su
+// activación: así, un pozo que se reactiva después de una reparación y sigue
+// sin reportar se avisa 6 horas después de reactivarse, en vez de quedar como
+// una caída antigua. Si no hay ninguna de las dos fechas, no hay forma de saber
+// cuándo pasó a rojo y se trata como conocido para no repetirlo todos los días.
 const esRojoNuevo = (pozo, now) => {
   const limite = RED_THRESHOLD_MINUTES + ALERT_WINDOW_MINUTES + ALERT_MARGIN_MINUTES;
-  if (pozo.minutesSinceLast !== null && pozo.minutesSinceLast !== undefined) {
-    return pozo.minutesSinceLast <= limite;
-  }
-  if (!pozo.activatedAt) {
+  const referencias = [pozo.lastCommunication, pozo.activatedAt]
+    .filter(Boolean)
+    .map((fecha) => new Date(fecha).getTime())
+    .filter((ms) => !Number.isNaN(ms));
+  if (referencias.length === 0) {
     return false;
   }
-  const minutosDesdeActivacion = Math.floor((now.getTime() - new Date(pozo.activatedAt).getTime()) / 60000);
-  return minutosDesdeActivacion > RED_THRESHOLD_MINUTES && minutosDesdeActivacion <= limite;
+  const minutos = Math.floor((now.getTime() - Math.max(...referencias)) / 60000);
+  return minutos > RED_THRESHOLD_MINUTES && minutos <= limite;
 };
 
 const formatDateForEmail = (isoString) => {
@@ -214,8 +221,9 @@ const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false } =
   return `
     <div style="font-family:Arial,sans-serif;color:#111;">
       <h2 style="color:#b91c1c;">Alerta - Pozos sin comunicación hace más de 6 horas</h2>
-      <p>${diario ? 'Desde el chequeo anterior, ' : ''}<strong>${redWells.length}</strong> pozo(s) ${diario ? 'pasaron a' : 'están en'} estado crítico al
-      ${formatDateForEmail(now.toISOString())}.</p>
+      <p>${diario
+        ? `En las últimas 24 horas, <strong>${redWells.length}</strong> pozo(s) pasaron a estado crítico`
+        : `<strong>${redWells.length}</strong> pozo(s) están en estado crítico`} (revisión del ${formatDateForEmail(now.toISOString())}).</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px;">
         <thead>
           <tr style="background:#fee2e2;">
@@ -229,13 +237,13 @@ const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false } =
         <tbody>${rows}</tbody>
       </table>
       ${conocidos.length > 0 ? `
-      <p style="margin-top:16px;">Siguen sin comunicación desde antes (ya avisados):</p>
+      <p style="margin-top:16px;">Otros pozos que siguen sin comunicación:</p>
       <ul style="font-size:14px;">${conocidos
         .map((w) => `<li>${escapeHtml(w.name)} (${escapeHtml(w.code)}), última comunicación: ${formatDateForEmail(w.lastCommunication)}</li>`)
         .join('')}</ul>` : ''}
       <p style="margin-top:16px;font-size:12px;color:#555;">
         ${diario
-          ? 'Este correo se envía una vez al día y solo cuando algún pozo pasó a estado crítico desde el chequeo anterior.'
+          ? 'Este correo se envía una vez al día y solo cuando algún pozo pasó a estado crítico en las últimas 24 horas.'
           : 'Este correo se envió a pedido y lista todos los pozos en estado crítico.'}
       </p>
     </div>`;
@@ -251,7 +259,7 @@ const runAlertCheck = async ({ soloNuevos = false } = {}) => {
   const { red, now } = await computeStatus();
 
   if (red.length === 0) {
-    return { sent: false, criticalCount: 0, message: 'No hay pozos en estado crítico.' };
+    return { sent: false, criticalCount: 0, newCount: 0, message: 'No hay pozos en estado crítico.' };
   }
 
   const nuevos = soloNuevos ? red.filter((pozo) => esRojoNuevo(pozo, now)) : red;

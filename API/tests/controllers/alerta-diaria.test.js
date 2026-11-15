@@ -58,34 +58,50 @@ afterEach(() => {
 
 describe('esRojoNuevo', () => {
   const limite = RED_THRESHOLD_MINUTES + ALERT_WINDOW_MINUTES + ALERT_MARGIN_MINUTES;
-  const conMinutos = (minutesSinceLast) => ({ minutesSinceLast, activatedAt: null });
+  const pozo = ({ reporteHace = null, activadoHace = null }) => ({
+    lastCommunication: reporteHace === null ? null : haceMinutos(reporteHace).toISOString(),
+    activatedAt: activadoHace === null ? null : haceMinutos(activadoHace).toISOString(),
+  });
 
   it('considera nuevo un pozo que acaba de pasar a rojo', () => {
-    expect(esRojoNuevo(conMinutos(RED_THRESHOLD_MINUTES + 1), AHORA)).toBe(true);
+    expect(esRojoNuevo(pozo({ reporteHace: RED_THRESHOLD_MINUTES + 1 }), AHORA)).toBe(true);
   });
 
-  it('considera nuevo un pozo que pasó a rojo justo después del chequeo anterior', () => {
-    expect(esRojoNuevo(conMinutos(limite), AHORA)).toBe(true);
+  it('considera nuevo un pozo en el borde del margen, que cubre los días de 25 horas', () => {
+    expect(esRojoNuevo(pozo({ reporteHace: limite }), AHORA)).toBe(true);
   });
 
-  it('considera conocido un pozo que ya estaba en rojo en el chequeo anterior', () => {
-    expect(esRojoNuevo(conMinutos(limite + 1), AHORA)).toBe(false);
+  it('considera conocido un pozo que pasó el borde del margen', () => {
+    expect(esRojoNuevo(pozo({ reporteHace: limite + 1 }), AHORA)).toBe(false);
   });
 
   it('considera conocido un pozo caído hace semanas', () => {
-    expect(esRojoNuevo(conMinutos(45 * 24 * 60), AHORA)).toBe(false);
+    expect(esRojoNuevo(pozo({ reporteHace: 45 * 24 * 60 }), AHORA)).toBe(false);
   });
 
   it('mide desde la activación a un pozo que nunca reportó', () => {
-    const activadoHace = (m) => ({ minutesSinceLast: null, activatedAt: haceMinutos(m).toISOString() });
+    expect(esRojoNuevo(pozo({ activadoHace: 7 * 60 }), AHORA)).toBe(true);
+    expect(esRojoNuevo(pozo({ activadoHace: 3 * 24 * 60 }), AHORA)).toBe(false);
+  });
 
-    expect(esRojoNuevo(activadoHace(7 * 60), AHORA)).toBe(true);
-    expect(esRojoNuevo(activadoHace(3 * 24 * 60), AHORA)).toBe(false);
-    expect(esRojoNuevo(activadoHace(2 * 60), AHORA)).toBe(false);
+  it('espera 6 horas desde la activación antes de considerarlo nuevo', () => {
+    expect(esRojoNuevo(pozo({ activadoHace: RED_THRESHOLD_MINUTES }), AHORA)).toBe(false);
+    expect(esRojoNuevo(pozo({ activadoHace: RED_THRESHOLD_MINUTES + 1 }), AHORA)).toBe(true);
+  });
+
+  it('avisa de un pozo reactivado que sigue sin reportar, aunque su último reporte sea antiguo', () => {
+    // Cayó por hardware hace 10 días, se desactivó, se reparó y se reactivó hace
+    // 10 horas, pero no volvió a reportar.
+    expect(esRojoNuevo(pozo({ reporteHace: 10 * 24 * 60, activadoHace: 10 * 60 }), AHORA)).toBe(true);
+  });
+
+  it('usa el último reporte si es más reciente que la activación', () => {
+    expect(esRojoNuevo(pozo({ reporteHace: 10 * 60, activadoHace: 30 * 24 * 60 }), AHORA)).toBe(true);
+    expect(esRojoNuevo(pozo({ reporteHace: 3 * 24 * 60, activadoHace: 30 * 24 * 60 }), AHORA)).toBe(false);
   });
 
   it('considera conocido un pozo sin reportes ni fecha de activación', () => {
-    expect(esRojoNuevo({ minutesSinceLast: null, activatedAt: null }, AHORA)).toBe(false);
+    expect(esRojoNuevo(pozo({}), AHORA)).toBe(false);
   });
 });
 
@@ -118,11 +134,12 @@ describe('runAlertCheck en el chequeo diario', () => {
     const correo = mockSendMail.mock.calls[0][0];
     expect(correo.subject).toBe('[Promedición] 1 pozo(s) nuevo(s) sin comunicación hace más de 6 horas');
 
-    const [tabla, recordatorio] = correo.html.split('Siguen sin comunicación desde antes');
+    const [tabla, recordatorio] = correo.html.split('Otros pozos que siguen sin comunicación');
     expect(tabla).toContain('Pozo 1');
     expect(tabla).not.toContain('Fuente de Agua N°1');
     expect(recordatorio).toContain('Fuente de Agua N°1');
     expect(correo.html).not.toContain('Parque Alviso');
+    expect(correo.html).toContain('En las últimas 24 horas');
     expect(correo.html).toContain('Este correo se envía una vez al día');
   });
 
@@ -131,7 +148,23 @@ describe('runAlertCheck en el chequeo diario', () => {
 
     await chequeoDiario();
 
-    expect(mockSendMail.mock.calls[0][0].html).not.toContain('Siguen sin comunicación desde antes');
+    expect(mockSendMail.mock.calls[0][0].html).not.toContain('Otros pozos que siguen sin comunicación');
+  });
+
+  it('escribe por un pozo reactivado que sigue sin reportar', async () => {
+    configurarPozos([
+      {
+        code: 'OB-0701-1496',
+        name: 'Fuente de Agua N°1',
+        ultimoReporte: haceMinutos(10 * 24 * 60),
+        activado: haceMinutos(10 * 60),
+      },
+    ]);
+
+    const resultado = await chequeoDiario();
+
+    expect(resultado).toMatchObject({ sent: true, newCount: 1 });
+    expect(mockSendMail.mock.calls[0][0].html).toContain('Fuente de Agua N°1');
   });
 
   it('no escribe si no hay pozos en rojo', async () => {
@@ -172,7 +205,7 @@ describe('runAlertCheck en el envío manual', () => {
     expect(correo.subject).toBe('[Promedición] 2 pozo(s) sin comunicación hace más de 6 horas');
     expect(correo.html).toContain('Pozo 1');
     expect(correo.html).toContain('Fuente de Agua N°1');
-    expect(correo.html).not.toContain('Siguen sin comunicación desde antes');
+    expect(correo.html).not.toContain('Otros pozos que siguen sin comunicación');
   });
 
   it('escribe aunque todos los pozos en rojo ya estuvieran caídos', async () => {
@@ -194,8 +227,9 @@ describe('programación del chequeo', () => {
     jest.doMock('node-cron', () => cron);
     jest.doMock('../../src/controllers/monitoring.controller', () => monitoreo);
     jest.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     require('../../src/jobs/scheduler').startSchedulers();
-    return { cron, monitoreo };
+    return { cron, monitoreo, warn };
   };
 
   afterEach(() => {
@@ -203,6 +237,7 @@ describe('programación del chequeo', () => {
     jest.dontMock('node-cron');
     jest.dontMock('../../src/controllers/monitoring.controller');
     console.log.mockRestore?.();
+    console.warn.mockRestore?.();
   });
 
   it('corre una vez al día a las 08:00 si no se configura otra programación', () => {
@@ -215,6 +250,31 @@ describe('programación del chequeo', () => {
     const { cron } = cargarScheduler('0 9 * * *');
 
     expect(cron.schedule.mock.calls[0][0]).toBe('0 9 * * *');
+  });
+
+  it('recupera la ejecución si el tick del cron se atrasa justo a esa hora', () => {
+    const { cron } = cargarScheduler(undefined);
+
+    expect(cron.schedule.mock.calls[0][2]).toMatchObject({ recoverMissedExecutions: true });
+  });
+
+  it('avisa en el log si la programación corre más de una vez al día', () => {
+    const { warn } = cargarScheduler('0 0,8,16 * * *');
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('corre más de una vez al día');
+  });
+
+  it.each(['0 8 * * *', '30 7 * * 1-5'])('no avisa con una sola hora al día (%s)', (programacion) => {
+    const { warn } = cargarScheduler(programacion);
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each(['0 */6 * * *', '0 8-10 * * *', '0 * * * *'])('avisa con varias horas al día (%s)', (programacion) => {
+    const { warn } = cargarScheduler(programacion);
+
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('pide solo los pozos nuevos en el chequeo automático', async () => {
