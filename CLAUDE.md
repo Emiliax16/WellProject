@@ -29,13 +29,13 @@ Este documento se enfoca principalmente en el **API** (el servicio SENDER tiene 
 - **dotenv** 16.4.5 - Gestión de variables de entorno
 - **xml2js** 0.6.2 - Parsing de XML (respuestas DGA)
 - **nodemailer** 6.9.13 - Envío de emails
+- **pg** y **pg-hstore** - Cliente PostgreSQL de Sequelize
+- **moment-timezone** - Fechas en hora de Chile para la DGA
 
 ### DevDependencies
 - **nodemon** 3.1.0 - Hot reload en desarrollo
 - **jest** 29.7.0 - Testing framework
 - **@faker-js/faker** 8.4.1 - Datos de prueba
-- **pg** 8.11.5 - Cliente PostgreSQL
-- **pg-hstore** 2.3.4 - Serialización de datos
 
 ## Estructura del Proyecto
 
@@ -896,7 +896,9 @@ module.exports = {
    - Build: `API/development.Dockerfile`
    - Puerto: 3000
    - Depends on: `db`
-   - Hot reload: Volume mount de `./API:/usr/src/app`
+   - Código montado como volumen (`./API:/usr/src/app`), pero corre con `node src/server.js`: no recarga sola
+   - Healthcheck: `GET /health` cada minuto; `docker ps` muestra `(healthy)` o `(unhealthy)`
+   - Logs con rotación: 5 archivos de 20 MB
 
 2. **db** (PostgreSQL)
    - Imagen: `postgres:14.11-alpine3.19`
@@ -911,7 +913,7 @@ module.exports = {
 
 Los puertos 3000 y 5432 se publican en todas las interfaces del host. En producción el security group de AWS es lo único que los mantiene cerrados a internet.
 
-**Comandos** (desarrollo local; en producción seguir `API/documentations/amazon-instance.md`, que reemplaza `down` por `restart api`):
+**Comandos** (desarrollo local; en producción seguir `API/documentations/amazon-instance.md`, que reemplaza `down` por `restart -t 15 api` y nunca usa `up -d` sin `--no-deps`):
 ```bash
 # Iniciar todos los servicios
 docker-compose up -d
@@ -953,6 +955,9 @@ npx sequelize-cli db:seed:all
 ### Desarrollo
 
 ```bash
+# Producción (lo que corre el contenedor api)
+npm start
+
 # Desarrollo con hot reload (nodemon)
 npm run dev
 
@@ -963,7 +968,9 @@ npm test
 npm run test:models
 ```
 
-No existe un script `start`: producción también corre con nodemon (issue #71).
+Producción corre con `node src/server.js`: si el proceso termina por un error, Docker reinicia el contenedor. nodemon queda solo para desarrollo; en docker-compose se activa con un `docker-compose.override.yml` local (ver `API/README.md`).
+
+Sequelize no imprime las consultas SQL salvo con `DB_LOGGING=true`. Producción corre con `NODE_ENV=development` y `config/config.js` solo define `development` y `test`: no cambiar `NODE_ENV` a `production` sin agregar antes esa configuración.
 
 ### Sequelize CLI
 
@@ -1022,7 +1029,7 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 **Despliegue**: manual. Lo mergeado en `master` no llega a producción hasta que alguien lo despliega. El procedimiento completo, con verificaciones de solo lectura, respaldo y rollback, está en `API/documentations/amazon-instance.md`. Los puntos que más suelen fallar son los siguientes:
 
 1. La instancia no tiene llave de GitHub, así que los cambios se bajan por HTTPS (`git fetch https://github.com/Emiliax16/WellProject.git master`).
-2. Como el código se monta como volumen y corre con nodemon, aplicar el merge ya reinicia la API.
+2. La API corre con `node` y no recarga sola: después del merge hay que hacer `docker-compose restart -t 15 api` (sin `-t`, la versión 2.17 corta a los 10 s).
 3. Si cambia `package.json`, hay que reconstruir con `up -d --build -V --no-deps api`.
 4. Antes de migrar, hay que hacer `pg_dump`.
 

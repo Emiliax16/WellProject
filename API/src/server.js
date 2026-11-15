@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
     // Este mensaje es la señal que el runbook de despliegue usa para confirmar
-    // que la aplicación recargó tras un `git pull`. No cambiar el texto.
+    // que la aplicación arrancó tras un despliegue. No cambiar el texto.
     console.log(`Escuchando en el puerto ${PORT}`);
     avisarSiFaltaClave();
     startSchedulers();
@@ -41,11 +41,9 @@ const registrarFatal = (tipo, error) => {
 // `uncaughtException` el estado del proceso es indeterminado y seguir sirviendo
 // peticiones puede corromper datos.
 //
-// ⚠️ Con nodemon, `exit(1)` deja la aplicación caída igual: nodemon no termina,
-// se queda esperando cambios en archivos, así que Docker ve vivo el PID 1 y no
-// aplica su política de reinicio. Lo que se gana hoy es el registro, que antes
-// no existía. Para que además se levante sola hace falta el issue #71 (correr
-// con `node` en vez de nodemon) o pasarle `--exitcrash` a nodemon.
+// En producción la API corre con `node` (`npm start`), así que `exit(1)`
+// detiene el contenedor y Docker lo levanta de nuevo. Con nodemon, que es solo
+// para desarrollo, el proceso queda esperando cambios y no se reinicia.
 process.on('uncaughtException', (error) => {
     registrarFatal('uncaughtException', error);
     process.exit(1);
@@ -65,8 +63,10 @@ process.on('unhandledRejection', (reason) => {
 const apagar = (senal) => {
     console.log(JSON.stringify({ level: 'info', msg: `${senal} recibido, cerrando` }));
     server.close(() => process.exit(0));
-    // Si alguna conexión no cierra, no quedarse colgado para siempre.
-    setTimeout(() => process.exit(1), 10_000).unref();
+    // Si alguna conexión no cierra, no quedarse colgado para siempre. 13 s
+    // cubren un envío a la DGA (hasta 12 s) y quedan por debajo de los 15 s que
+    // Docker espera antes de forzar el cierre (`stop_grace_period` de `api`).
+    setTimeout(() => process.exit(1), 13_000).unref();
 };
 
 process.on('SIGTERM', () => apagar('SIGTERM'));
