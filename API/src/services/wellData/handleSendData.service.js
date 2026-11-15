@@ -2,6 +2,7 @@ const dotenv = require("dotenv");
 const moment = require("moment-timezone");
 const xml2js = require("xml2js");
 const axios = require("axios");
+const { Op } = require("sequelize");
 const ErrorHandler = require("../../utils/error.util");
 const { couldntPostToDga } = require("../../utils/errorcodes.util");
 
@@ -100,11 +101,73 @@ const yaRegistradoEnDga = (response) =>
 const mensajeDeRespuesta = (response) =>
   response?.message ?? response?.data?.message ?? "sin mensaje";
 
+// Hora de un reporte como número (0-23), a partir de "HH:mm", "H:mm" o con
+// segundos. `null` si no se reconoce, y en ese caso el reporte se envía igual.
+const horaDelReporte = (hour) => {
+  const coincidencia = /^(\d{1,2}):\d{2}/.exec(String(hour ?? "").trim());
+  return coincidencia ? Number(coincidencia[1]) : null;
+};
+
+// Busca otro reporte de la misma obra, fecha y hora que ya esté enviado.
+//
+// Como la DGA guarda una sola medición por obra, fecha y hora, enviar un
+// segundo reporte de esa hora solo produce el rechazo "Ya existe un registro".
+// Además, su documento de transmisión (§6.3) advierte que retransmitir
+// mediciones ya recibidas puede bloquear al centro de control. Los pozos
+// reportan más de una vez por hora, así que sin esta revisión la mitad de los
+// envíos diarios terminaba en ese rechazo.
+//
+// Solo cuenta un reporte con `sent = true`. Si el primero de la hora falló, el
+// siguiente se envía normalmente y completa la hora.
+//
+// Se consulta a través del modelo del propio reporte (`wellData.constructor`)
+// para no importar los modelos desde acá: el modelo `wellData` ya importa este
+// servicio, y la importación inversa sería circular.
+const otroEnviadoEnLaMismaHora = async (wellData) => {
+  const Modelo = wellData?.constructor;
+  const hora = horaDelReporte(wellData?.hour);
+  if (typeof Modelo?.findOne !== "function" || hora === null || !wellData.code || !wellData.date) {
+    return null;
+  }
+  const prefijos = [`${String(hora).padStart(2, "0")}:%`];
+  if (hora < 10) prefijos.push(`${hora}:%`);
+  return Modelo.findOne({
+    attributes: ["id"],
+    where: {
+      code: wellData.code,
+      date: wellData.date,
+      sent: true,
+      id: { [Op.ne]: wellData.id },
+      [Op.or]: prefijos.map((prefijo) => ({ hour: { [Op.like]: prefijo } })),
+    },
+  });
+};
+
 /**
  * @description Procesa los datos de un pozo y los envía a la DGA
  */
 const processAndPostData = async (wellData, well) => {
   try {
+    // Un reporte que ya está enviado no se vuelve a transmitir, aunque alguien
+    // lo reenvíe por la API: la DGA advierte que retransmitir puede bloquear al
+    // centro de control.
+    if (wellData.sent === true) {
+      console.log(`[dga] reporte ${wellData.id} | ya estaba enviado; no se reenvía`);
+      return true;
+    }
+
+    const enviadoAntes = await otroEnviadoEnLaMismaHora(wellData);
+    if (enviadoAntes) {
+      console.log(
+        `[dga] reporte ${wellData.id} | la obra ${wellData.code} ya tiene enviada esa hora (reporte ${enviadoAntes.id}); no se reenvía y se marca como enviado`
+      );
+      await wellData.update({
+        sent: true,
+        sentDate: new moment().tz("America/Santiago").format(),
+      });
+      return true;
+    }
+
     const data = { ...well.toJSON(), ...wellData.toJSON() };
     // Nunca loguear `data` ni `formatedData`: ambos llevan las credenciales
     // DGA del pozo (password, rutEmpresa, rutUsuario) en texto plano.

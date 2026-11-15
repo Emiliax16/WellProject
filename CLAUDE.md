@@ -785,11 +785,12 @@ function errorHandler(err, req, res, next) {
 **Flujo**:
 1. Recibe un `wellData` recién creado
 2. Verifica que el pozo esté activo (`well.isActived`)
-3. Formatea los datos según el formato requerido por DGA
-4. Realiza POST a la API de DGA (vía axios)
-5. Parsea respuesta XML de DGA (vía xml2js)
-6. Actualiza `wellData.sent = true` si éxito
-7. Guarda `sentDate` con fecha/hora del envío
+3. Si otro reporte de la misma obra, fecha y hora ya está enviado, no envía y marca este como enviado: la DGA guarda una medición por hora y advierte que retransmitir puede bloquear al centro de control
+4. Formatea los datos según el formato requerido por DGA
+5. Realiza POST a la API de DGA (vía axios, con timeout de 12 s)
+6. Lee la respuesta JSON de la DGA: éxito con `status: '00'`
+7. Actualiza `wellData.sent = true` si éxito
+8. Guarda `sentDate` con fecha/hora del envío
 
 **Trigger**: Hook `afterCreate` en modelo `wellData`. `POST /massImportWellData` usa `bulkCreate` sin `individualHooks`, así que los reportes que entran por esa ruta no se envían a la DGA.
 
