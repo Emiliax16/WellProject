@@ -18,11 +18,11 @@ const Person = db.person;
 //  TODO: no se esta usando ninguno de estos métodos excepto el activeOrDesactiveWell
 const getAllWells = async (req, res, next) => {
   try {
-    // Este listado es global, no filtra por cliente y no exige sesión, así que
-    // pide explícitamente las columnas que puede publicar en vez de excluir las
-    // tres sensibles. Con una lista de exclusiones, la próxima columna que
-    // alguien agregue al modelo saldría publicada sin que nadie toque este
-    // archivo, y acá eso sería sin siquiera pedir token.
+    // Este listado es global y no filtra por cliente (la ruta lo limita a
+    // admin), así que pide explícitamente las columnas que puede publicar en vez
+    // de excluir las tres sensibles. Con una lista de exclusiones, la próxima
+    // columna que alguien agregue al modelo saldría publicada sin que nadie toque
+    // este archivo.
     const wells = await Well.findAll({ attributes: CAMPOS_PUBLICOS_WELL });
     res.json(wells);
   } catch (error) {

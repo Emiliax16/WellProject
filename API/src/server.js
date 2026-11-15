@@ -1,5 +1,6 @@
 const app = require('./app');
 const { startSchedulers } = require('./jobs/scheduler');
+const { avisarSiFaltaClave } = require('./middlewares/internal-key.middleware');
 
 const PORT = process.env.PORT || 3000;
 
@@ -7,6 +8,7 @@ const server = app.listen(PORT, () => {
     // Este mensaje es la señal que el runbook de despliegue usa para confirmar
     // que la aplicación recargó tras un `git pull`. No cambiar el texto.
     console.log(`Escuchando en el puerto ${PORT}`);
+    avisarSiFaltaClave();
     startSchedulers();
 });
 

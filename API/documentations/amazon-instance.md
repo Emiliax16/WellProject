@@ -26,9 +26,18 @@ Hay dos archivos de entorno en la instancia, ninguno versionado:
 1. `~/WellProject/.env`, que docker-compose inyecta en el contenedor `api` al crearlo. Contiene la conexión a la base.
 2. `~/WellProject/API/.env`, que la API lee con `dotenv` al arrancar. Contiene, entre otras, `JWT_SECRET`, las credenciales de correo, la programación de las alertas (`ALERT_CRON_SCHEDULE`, `CRON_TIMEZONE`) y `INTERNAL_API_KEY`.
 
-El contenedor `sender` tiene su propio archivo, `~/WellProject/SENDER/wellproject/.env`, con las URL de la API (`FETCH_API_REPORTS`, `POST_API_REPORTS`) y la misma `INTERNAL_API_KEY`.
+El contenedor `sender` tiene su propio archivo, `~/WellProject/SENDER/wellproject/.env`, con las URL de la API (`FETCH_API_REPORTS`, `POST_API_REPORTS`) y la misma `INTERNAL_API_KEY`. Esas URL deben apuntar a `api:3000`, por la red interna de Docker, y nunca al dominio público: la llamada va por `http` y la clave viajaría sin cifrar.
 
-`INTERNAL_API_KEY` es la clave que protege `/fetchUnsentReports` y `/repostToDGA`, las dos rutas que consume el SENDER. Debe tener al menos 32 caracteres y ser idéntica en los dos archivos; se genera con `openssl rand -hex 32`. Si falta en la API o es más corta, la API rechaza toda llamada a esas rutas, y si el SENDER no la tiene o no coincide, sus llamadas reciben 401.
+`INTERNAL_API_KEY` es la clave que protege `/fetchUnsentReports` y `/repostToDGA`, las dos rutas que consume el SENDER. Debe tener al menos 32 caracteres, ser idéntica en los dos archivos y escribirse sin comillas. Se genera con `openssl rand -hex 32`. Si falta en la API o es más corta, la API rechaza toda llamada a esas rutas y lo avisa en el log al arrancar. Si el SENDER no la tiene o no coincide, sus llamadas reciben 401.
+
+Después de agregar o cambiar la clave, se puede comprobar desde el contenedor `sender`, que llega a la API por la red interna. La primera llamada debe responder 401 y la segunda 200. La clave se lee desde `/rails/.env`, que es el mismo archivo montado en el contenedor, porque una variable recién agregada no existe en el entorno del contenedor hasta recrearlo. Es una consulta de solo lectura, acotada por la paginación de la ruta:
+
+```sh
+sudo docker exec sender sh -c 'curl -s -o /dev/null -w "%{http_code}\n" "http://$FETCH_API_REPORTS?size=1"'
+sudo docker exec sender sh -c 'curl -s -o /dev/null -w "%{http_code}\n" \
+  -H "X-Internal-Api-Key: $(sed -nE "s/^[[:space:]]*INTERNAL_API_KEY[[:space:]]*=[[:space:]]*//p" /rails/.env)" \
+  "http://$FETCH_API_REPORTS?size=1"'
+```
 
 Algunas variables están repetidas en los dos archivos (las `DB_*`, `API_PORT` y `NODE_ENV`). Como `dotenv` no sobrescribe variables que ya existen, en esos casos gana el valor de `~/WellProject/.env`, y cambiarlas en `API/.env` no tiene efecto. La forma de aplicar un cambio también depende del archivo, como se explica en "Aplicar cambios de entorno".
 
@@ -235,7 +244,7 @@ Para `~/WellProject/.env`, en cambio, `restart` no sirve: docker-compose lee ese
 sudo docker-compose up -d --no-deps api
 ```
 
-Lo mismo vale para `SENDER/wellproject/.env`: hay que recrear el contenedor con `sudo docker-compose up -d --no-deps sender`. Al recrearlo se pierden el crontab y el demonio `cron`, que hay que reponer como se indica en la sección del SENDER.
+`SENDER/wellproject/.env` es un caso intermedio. La tarea del cron lo lee en cada ejecución con `dotenv-rails`, porque el archivo está montado dentro del contenedor, así que una variable nueva le llega sin recrear nada. Recrear el contenedor (`sudo docker-compose up -d --no-deps sender`) solo hace falta cuando se cambia el valor de una variable que ya existía, por ejemplo al rotar `INTERNAL_API_KEY`. Al recrearlo se pierden el crontab y el demonio `cron`, que hay que reponer como se indica en la sección del SENDER.
 
 En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres, y el `stop_grace_period` de 3 segundos del compose puede forzar su cierre, lo que obliga a una recuperación al arrancar. Además elimina el contenedor `sender`, que el `up` siguiente crea de nuevo sin crontab ni demonio `cron`.
 

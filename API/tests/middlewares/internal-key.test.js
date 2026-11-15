@@ -57,7 +57,7 @@ describe('internalKeyMiddleware', () => {
     expect(pasarPor(middleware, pedido({ 'X-Internal-Api-Key': CLAVE }))).toBeUndefined();
   });
 
-  it('acepta el header sin importar mayúsculas en su nombre', () => {
+  it('reconoce el header cuando Node entrega su nombre en minúsculas', () => {
     expect(pasarPor(middleware, pedido({ 'x-internal-api-key': CLAVE }))).toBeUndefined();
   });
 
@@ -100,6 +100,20 @@ describe('internalKeyMiddleware', () => {
       process.env.INTERNAL_API_KEY = 'corta';
 
       esperarRechazo(pasarPor(middleware, pedido({ 'X-Internal-Api-Key': 'corta' })));
+    });
+
+    it('avisa al arrancar el servidor, antes de cualquier llamada', () => {
+      delete process.env.INTERNAL_API_KEY;
+
+      middleware.avisarSiFaltaClave();
+
+      expect(silenciarError).toHaveBeenCalledTimes(1);
+    });
+
+    it('no avisa al arrancar si la clave es válida', () => {
+      middleware.avisarSiFaltaClave();
+
+      expect(silenciarError).not.toHaveBeenCalled();
     });
 
     it('avisa en el log una sola vez', () => {

@@ -16,6 +16,23 @@ const LARGO_MINIMO = 32;
 
 let avisoDeConfiguracion = false;
 
+const claveConfigurada = () => {
+  const esperada = process.env.INTERNAL_API_KEY;
+  return Boolean(esperada) && esperada.length >= LARGO_MINIMO;
+};
+
+// Se llama al arrancar el servidor, para que un deploy sin clave se note en el
+// mismo momento y no recién cuando alguien llame a una ruta protegida.
+const avisarSiFaltaClave = () => {
+  if (claveConfigurada() || avisoDeConfiguracion) {
+    return;
+  }
+  console.error(
+    `[internal-key] INTERNAL_API_KEY no está definida o tiene menos de ${LARGO_MINIMO} caracteres: se rechazan todas las llamadas internas`
+  );
+  avisoDeConfiguracion = true;
+};
+
 // Se comparan los hash y no las claves: `timingSafeEqual` exige buffers del
 // mismo largo, y comparar los hash evita además que el tiempo de respuesta
 // delate el largo de la clave.
@@ -26,17 +43,11 @@ const sonIguales = (recibida, esperada) => {
 };
 
 const internalKeyMiddleware = (req, res, next) => {
-  const esperada = process.env.INTERNAL_API_KEY;
-
-  if (!esperada || esperada.length < LARGO_MINIMO) {
-    if (!avisoDeConfiguracion) {
-      console.error(
-        `[internal-key] INTERNAL_API_KEY no está definida o tiene menos de ${LARGO_MINIMO} caracteres: se rechazan todas las llamadas internas`
-      );
-      avisoDeConfiguracion = true;
-    }
+  if (!claveConfigurada()) {
+    avisarSiFaltaClave();
     return next(new ErrorHandler(invalidInternalKey));
   }
+  const esperada = process.env.INTERNAL_API_KEY;
 
   const recibida = req.get('X-Internal-Api-Key');
   if (typeof recibida !== 'string' || !sonIguales(recibida, esperada)) {
@@ -47,3 +58,4 @@ const internalKeyMiddleware = (req, res, next) => {
 };
 
 module.exports = internalKeyMiddleware;
+module.exports.avisarSiFaltaClave = avisarSiFaltaClave;

@@ -53,41 +53,27 @@ Estos endpoints quedan abiertos:
 |---|---|---|
 | `POST /wellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
 | `POST /massImportWellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
-| `GET /fetchUnsentReports` | servicio SENDER | llama por HTTP sin token |
-| `POST /repostToDGA` | servicio SENDER | llama por HTTP sin token |
-| `GET /well` | ninguno confirmado | ver más abajo |
 | `POST /users/login` | portal | es el que emite el token |
 | `POST /send-email` | landing page | formulario de contacto público |
 | `GET /placeholder` | ninguno | ruta de ejemplo |
 
-**Sobre `GET /well`.** Devolvía el modelo completo del pozo, credenciales DGA
-incluidas, sin pedir sesión. La fuga se cerró excluyendo `password`,
-`rutEmpresa` y `rutUsuario` de la consulta, pero el endpoint se dejó abierto a
-propósito.
+Los dos primeros deberían pasar a validar un secreto o a restringirse por IP.
+Eso requiere coordinar el cambio con Layrz (issue #62).
 
-El motivo es que no hay forma de saber desde el código qué endpoints consumen
-los dispositivos de Layrz: no aparecen en este repo ni en el del portal. Si
-usaran este listado para sincronizar el catálogo de pozos, cerrarlo cortaría la
-ingesta de telemetría en silencio. Se prefirió dejar expuesto el catálogo
-(nombre, ubicación y código) antes que arriesgar eso.
+**Rutas del SENDER.** `GET /fetchUnsentReports` y `POST /repostToDGA` no usan
+JWT porque el SENDER no tiene usuario, pero exigen la clave interna compartida
+en el header `X-Internal-Api-Key`, igual a `INTERNAL_API_KEY`. Si la variable no
+está configurada con al menos 32 caracteres, se rechaza toda llamada.
 
-Para cerrarlo hay que revisar primero los access logs de producción y descartar
-tráfico externo.
-
-Los cuatro primeros deberían pasar a validar un secreto compartido
-(`INTERNAL_API_KEY`) enviado por header. Eso requiere coordinar el cambio con
-Layrz y con el deploy del SENDER, así que no entra en el hotfix de autorización.
+**`GET /well`.** Exige sesión de admin. Antes era anónimo y entregaba el código
+de todos los pozos. Se cerró después de revisar los logs de producción: ni el
+portal ni los dispositivos lo usan.
 
 ### Consecuencias que conviene tener presentes
 
 **Se puede inyectar telemetría falsa.** `POST /wellData` y `POST
 /massImportWellData` aceptan reportes de cualquiera que conozca el `code` de un
 pozo. Ese código viaja en las respuestas de varios endpoints del portal.
-
-**El reenvío a la DGA sigue siendo disparable sin sesión.**
-`POST /repostAllReportsToDGA` exige sesión, pero `POST /repostToDGA` hace lo
-mismo de a un reporte y queda abierto. Autenticar el primero sube el costo de
-abusar el reenvío, no lo impide. Cerrar el segundo depende del SENDER.
 
 **`POST /send-email` es un relay de correo abierto.** No tiene rate limit ni
 captcha, y despacha desde la cuenta de Gmail configurada en `EMAIL_USER`. Abusarlo
