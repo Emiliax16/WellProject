@@ -46,7 +46,7 @@ WellProject/
 │   │   ├── config.js           # Configuración de base de datos Sequelize
 │   │   └── index.js            # Exports de configuración
 │   ├── documentations/         # Documentación técnica del proyecto
-│   │   ├── amazon-instance.md  # Navegación y comandos AWS
+│   │   ├── amazon-instance.md  # Operación y despliegue de producción
 │   │   ├── dev-process.md      # Proceso de desarrollo
 │   │   ├── files-order.md      # Estructura de archivos
 │   │   ├── git-conventions.md  # Convenciones de Git
@@ -580,8 +580,8 @@ role (1) ──────< user (N)
 
 **GET** `/well/:id`
 - **Descripción**: Obtener wellData de un pozo específico
+- **Auth**: Requerido (Admin, Company, Normal). No verifica que el pozo pertenezca a quien consulta y carga todos sus reportes sin paginar.
 - **Response**: Array de wellData
-- **Roles**: Público (pendiente protección)
 
 **POST** `/well`
 - **Descripción**: Crear un pozo (alias de `/clients/:id/wells/create`)
@@ -791,14 +791,11 @@ function errorHandler(err, req, res, next) {
 6. Actualiza `wellData.sent = true` si éxito
 7. Guarda `sentDate` con fecha/hora del envío
 
-**Trigger**: Hook `afterCreate` en modelo `wellData`
+**Trigger**: Hook `afterCreate` en modelo `wellData`. `POST /massImportWellData` usa `bulkCreate` sin `individualHooks`, así que los reportes que entran por esa ruta no se envían a la DGA.
 
-**Credenciales DGA** (desde `.env`):
-```bash
-DGA_RUT_COMPANY=    # RUT de la empresa registrada en DGA
-DGA_RUT=            # RUT del usuario DGA
-DGA_PASSWORD=       # Contraseña DGA
-```
+**Credenciales DGA**: son propias de cada pozo y se guardan en `wells.rutEmpresa`, `wells.rutUsuario` y `wells.password`. El MOP las entrega una sola vez y no se pueden rotar, por lo que no deben aparecer en respuestas HTTP ni en logs. Las variables `DGA_*` de las plantillas antiguas no se usan.
+
+**Rechazo por duplicado**: los pozos envían dos reportes por hora y la DGA rechaza el segundo con "Ya existe un registro en esa fecha, hora para la obra". Ese reporte queda con `sent = false` aunque la hora sí quedó registrada.
 
 ### Servicio SENDER (Ruby on Rails)
 
@@ -810,9 +807,9 @@ DGA_PASSWORD=       # Contraseña DGA
 3. Enviar a DGA
 4. Actualizar estado de reportes
 
-**Programación**: Configurado con `whenever` gem
+**Programación**: Configurado con `whenever` gem. El servicio `cron` se inicia a mano dentro del contenedor y se pierde cada vez que este se reinicia o se recrea; en noviembre de 2026 llevaba detenido desde el 11 de agosto. Además, aborta el lote ante el primer rechazo de la DGA.
 
-**Documentación**: Ver `SENDER/README.md`
+**Documentación**: Ver `SENDER/README.md` y `API/documentations/amazon-instance.md`
 
 ## Configuración
 
@@ -840,11 +837,13 @@ BCRYPT_SALT_ROUNDS=10
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
 
-# DGA (Dirección General de Aguas)
-DGA_RUT_COMPANY=12345678-9
-DGA_RUT=98765432-1
-DGA_PASSWORD=dga_password
+# Alertas de monitoreo de pozos
+ALERT_EMAIL_TO=destino@example.com
+ALERT_CRON_SCHEDULE=0 */6 * * *
+CRON_TIMEZONE=America/Santiago
 ```
+
+En producción existen dos archivos: `~/WellProject/.env`, que docker-compose inyecta en el contenedor, y `~/WellProject/API/.env`, que `dotenv` lee al arrancar. Un cambio en ellos requiere reiniciar la API.
 
 ### Configuración de Sequelize
 
@@ -904,9 +903,11 @@ module.exports = {
 3. **sender** (Ruby on Rails)
    - Build: `SENDER/wellproject/Dockerfile`
    - Depends on: `api`, `db`
-   - Cron jobs para envío a DGA
+   - Cron jobs para envío a DGA (el servicio `cron` se inicia a mano, ver arriba)
 
-**Comandos**:
+Los puertos 3000 y 5432 se publican en todas las interfaces del host. En producción el security group de AWS es lo único que los mantiene cerrados a internet.
+
+**Comandos** (desarrollo local; en producción seguir `API/documentations/amazon-instance.md`, que reemplaza `down` por `restart api`):
 ```bash
 # Iniciar todos los servicios
 docker-compose up -d
@@ -951,12 +952,14 @@ npx sequelize-cli db:seed:all
 # Desarrollo con hot reload (nodemon)
 npm run dev
 
-# Producción
-npm start
-
-# Tests
+# Tests (excluye los de modelos, que limpian la base)
 npm test
+
+# Tests de modelos
+npm run test:models
 ```
+
+No existe un script `start`: producción también corre con nodemon (issue #71).
 
 ### Sequelize CLI
 
@@ -1009,20 +1012,16 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 
 ### Entorno de Producción
 
-**Plataforma**: AWS EC2 (ver `documentations/amazon-instance.md`)
+**Plataforma**: una instancia AWS EC2 con docker-compose (API, PostgreSQL en contenedor y SENDER) detrás de Nginx. No hay RDS ni PM2.
 
-**Base de datos**: PostgreSQL (posiblemente RDS)
+**Despliegue**: manual. Lo mergeado en `master` no llega a producción hasta que alguien lo despliega. El procedimiento completo, con verificaciones de solo lectura, respaldo y rollback, está en `API/documentations/amazon-instance.md`. Los puntos que más suelen fallar son los siguientes:
 
-**Proceso**:
-1. SSH a instancia EC2
-2. Pull de cambios desde Git
-3. `npm install` (si hay nuevas dependencias)
-4. `npx sequelize-cli db:migrate` (aplicar migraciones)
-5. Reiniciar servicio (PM2, systemd, o Docker)
+1. La instancia no tiene llave de GitHub, así que los cambios se bajan por HTTPS (`git fetch https://github.com/Emiliax16/WellProject.git master`).
+2. Como el código se monta como volumen y corre con nodemon, aplicar el merge ya reinicia la API.
+3. Si cambia `package.json`, hay que reconstruir con `up -d --build -V --no-deps api`.
+4. Antes de migrar, hay que hacer `pg_dump`.
 
-**Variables de entorno**: Configurar `.env` en servidor con credenciales de producción
-
-**Logs**: Monitorear logs de errores y accesos
+**Variables de entorno**: ver la sección Configuración. Nunca se commitean.
 
 ## Convenciones de Desarrollo
 
@@ -1079,7 +1078,7 @@ const controllerFunction = async (req, res, next) => {
 
 Ver carpeta `documentations/`:
 
-- **amazon-instance.md**: Navegación y comandos de AWS EC2
+- **amazon-instance.md**: Operación de la instancia de producción: revisiones, despliegue, rollback, base en solo lectura y cron del SENDER
 - **dev-process.md**: Proceso de desarrollo completo
 - **files-order.md**: Estructura de archivos detallada
 - **git-conventions.md**: Convenciones de Git y commits
@@ -1104,11 +1103,9 @@ Ver carpeta `documentations/`:
 
 ### Endpoints de Producción
 - API Backend: `https://promedicionbackend.com/`
-- Frontend: `https://promedicionbackend.com/` (servido desde S3/CloudFront)
+- Frontend: `https://promedicion.cl/` (servido desde S3/CloudFront, repositorio `WellProjectFront`)
 
 ---
 
-**Última actualización**: 2025-11-22
-**Versión**: 1.0.0
+**Última actualización**: 2026-11-15
 **Autor**: Equipo WellProject
-**Estado**: ✅ Producción (estable)
