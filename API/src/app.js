@@ -13,9 +13,14 @@ const distributorRoute = require('./routes/distributor.route');
 const statsRoute = require('./routes/stats.route');
 const activityLogRoute = require('./routes/activityLog.route');
 const monitoringRoute = require('./routes/monitoring.route');
+const healthRoute = require('./routes/health.route');
 
 // App initialization
 const app = express();
+
+// Va antes del logger de peticiones: el healthcheck de Docker la llama cada
+// minuto y llenaría el log de líneas iguales.
+app.use(healthRoute);
 
 // Middlewares
 app.use(cors());

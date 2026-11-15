@@ -11,7 +11,7 @@ La instancia tiene menos de 1 GB de RAM y un swap de 2 GB, así que cualquier co
 | Componente | Dónde | Notas |
 |---|---|---|
 | Nginx | Host, puertos 80 y 443 | Termina TLS con certificados de Certbot y reenvía `promedicionbackend.com` a `localhost:3000` |
-| `api` | Contenedor Docker | Express con nodemon. El código se monta desde `~/WellProject/API` como volumen |
+| `api` | Contenedor Docker | Express con `node` (`npm start`). El código se monta desde `~/WellProject/API` como volumen. Healthcheck en `/health` |
 | `wellproject-db-1` | Contenedor Docker | PostgreSQL 14, base `db-well`, volumen persistente |
 | `sender` | Contenedor Docker | Rails. Su cron depende de pasos manuales (ver más abajo) |
 
@@ -123,7 +123,7 @@ Al leer el último resultado hay que considerar que los pozos pueden enviar más
 
 ## Desplegar la API
 
-Como el código de la API se monta como volumen y corre con nodemon, actualizar los archivos en disco ya es un despliegue: nodemon detecta el cambio y reinicia el proceso en pocos segundos. Durante ese reinicio la API no responde, y un reporte que llegue en ese momento puede perderse, si el dispositivo no reintenta, o quedar a medio enviar. Antes de desplegar, conviene revisar en los logs en qué minutos reportan los pozos y elegir un momento lejano a ellos. Lo mismo vale para cualquier `restart` o `up` del contenedor `api`.
+El código de la API se monta como volumen, pero la API corre con `node` y no recarga sola: después de actualizar los archivos sigue corriendo la versión anterior hasta que se reinicia el contenedor (paso 9). Al reiniciar, `server.js` deja de aceptar conexiones y espera hasta 10 segundos a que terminen las peticiones en curso, y Docker le da 15 antes de forzar el cierre. Aun así, durante unos segundos la API no responde, y un reporte que llegue en ese momento puede perderse si el dispositivo no reintenta. Antes de desplegar conviene revisar en los logs en qué minutos reportan los pozos y elegir un momento lejano a ellos, y también evitar las 08:00, la hora del chequeo diario de alertas.
 
 La instancia no tiene una llave registrada en GitHub, por lo que `git pull origin master` falla con un error de permisos. Como el repositorio es público, los cambios se bajan por HTTPS sin credenciales y sin modificar el remoto configurado. El procedimiento es el siguiente:
 
@@ -196,21 +196,28 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
    sudo docker exec api npx sequelize-cli@6.6.5 db:migrate
    ```
 
-8. **Solo si cambiaron `package.json` o `package-lock.json`:** reconstruir la imagen y recrear el volumen de `node_modules` con `-V`. De lo contrario, el contenedor sigue usando las dependencias antiguas. Hay que tener en cuenta que el merge del paso 6 ya reinició la API con el código nuevo, así que si este requiere un paquete nuevo, la API queda caída hasta que termina este comando:
+8. **Solo si cambiaron `package.json` o `package-lock.json`:** reconstruir la imagen y recrear el contenedor con un volumen de `node_modules` nuevo (`-V`). De lo contrario, el contenedor sigue usando las dependencias antiguas. El build corre mientras la versión anterior sigue atendiendo, y la recreación ya arranca el código nuevo, así que en este caso se salta el paso 9:
 
    ```sh
    sudo docker-compose up -d --build -V --no-deps api
    ```
 
-9. Verificar que la API reinició y que vuelve a recibir reportes:
+9. Reiniciar la API para que cargue el código nuevo:
 
    ```sh
-   sudo docker logs api --since 2m 2>&1 | grep -aE 'Escuchando|scheduler|Error|crashed'
+   sudo docker-compose restart api
    ```
 
-   Luego, esperar al siguiente reporte de un pozo y confirmar que aparece una línea `[dga] respuesta`.
+10. Verificar que la API arrancó, que está sana y que vuelve a recibir reportes:
 
-10. Registrar el commit nuevo con `echo "despues=$(git rev-parse HEAD)" >> ~/deploys.log`.
+    ```sh
+    sudo docker logs api --since 2m 2>&1 | grep -aE 'Escuchando|scheduler|internal-key|Error|fatal'
+    sudo docker ps --filter name=api --format '{{.Names}} {{.Status}}'   # debe decir (healthy)
+    ```
+
+    Luego, esperar al siguiente reporte de un pozo y confirmar que aparece una línea `[dga]`.
+
+11. Registrar el commit nuevo con `echo "despues=$(git rev-parse HEAD)" >> ~/deploys.log`.
 
 ### Volver atrás
 
@@ -246,7 +253,21 @@ sudo docker-compose up -d --no-deps api
 
 `SENDER/wellproject/.env` es un caso intermedio. La tarea del cron lo lee en cada ejecución con `dotenv-rails`, porque el archivo está montado dentro del contenedor, así que una variable nueva le llega sin recrear nada. Recrear el contenedor (`sudo docker-compose up -d --no-deps sender`) solo hace falta cuando se cambia el valor de una variable que ya existía, por ejemplo al rotar `INTERNAL_API_KEY`. Al recrearlo se pierden el crontab y el demonio `cron`, que hay que reponer como se indica en la sección del SENDER.
 
-En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres, y el `stop_grace_period` de 3 segundos del compose puede forzar su cierre, lo que obliga a una recuperación al arrancar. Además elimina el contenedor `sender`, que el `up` siguiente crea de nuevo sin crontab ni demonio `cron`.
+En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres y elimina el contenedor `sender`, que el `up` siguiente crea de nuevo sin crontab ni demonio `cron`.
+
+### Salud de la API
+
+`GET /health` responde `200 {"status":"ok"}` si la API está viva y la base responde, y `503` si no. Es pública y no devuelve detalles. Docker la consulta cada minuto, y `docker ps` muestra el resultado como `(healthy)` o `(unhealthy)`.
+
+Un contenedor `unhealthy` no se reinicia solo: docker-compose solo informa el estado. Lo que sí se reinicia solo es un proceso que termina, porque la API corre con `node` y el contenedor tiene `restart: unless-stopped`. Para enterarse de una caída sin estar mirando la instancia, conviene configurar un monitor externo gratuito, por ejemplo UptimeRobot, que consulte `https://promedicionbackend.com/health` cada pocos minutos y avise por correo.
+
+### Cambio a `node`, healthcheck y rotación de logs (una sola vez)
+
+Hasta noviembre de 2026 la API corría con nodemon, el contenedor no tenía healthcheck y los logs no rotaban. Esos cambios están en `docker-compose.yml` y solo se aplican al recrear cada contenedor:
+
+1. **`api`:** se recrea con el paso 8 del despliegue, porque el mismo cambio movió dependencias en `package.json`. Al recrearlo se elimina el log anterior, que llegó a pesar 3 GB.
+2. **`db`:** su nuevo margen de apagado (60 s) y la rotación de logs se aplican al recrearla. El contenedor actual todavía tiene el margen de 3 s, así que antes hay que detenerla a mano con un margen amplio, en un momento sin tráfico: `sudo docker stop -t 60 wellproject-db-1 && sudo docker-compose up -d --no-deps db`. Mientras tanto la API responde error.
+3. **`sender`:** toma la rotación de logs la próxima vez que se recree. Al recrearlo hay que reponer su cron.
 
 ## SENDER y su cron
 
@@ -292,6 +313,7 @@ Como el job vive dentro del proceso de la API, si la API se cae las alertas tamb
 
 Los siguientes puntos están registrados como issues o pendientes y explican comportamientos que se pueden observar en la instancia:
 
-- Si el proceso de Node muere por un error, nodemon no lo vuelve a levantar, y el contenedor sigue figurando como `Up` (issue #71).
-- Los logs de Docker no tienen rotación y crecen sin límite. Conviene revisar su tamaño con `sudo du -sh /var/lib/docker/containers`.
+- La rotación de logs (5 archivos de 20 MB por contenedor) solo aplica a los contenedores recreados después de noviembre de 2026. Conviene revisar el tamaño con `sudo du -sh /var/lib/docker/containers`.
+- Sequelize ya no imprime cada consulta SQL. Para diagnosticar se puede activar con `DB_LOGGING=true` en `API/.env` y reiniciar la API.
+- Producción corre con `NODE_ENV=development`, y `config/config.js` solo define `development` y `test`. Cambiar `NODE_ENV` a `production` sin agregar antes esa configuración deja a la API sin conexión a la base.
 - `docker-compose up -d --build -V` deja un volumen anónimo huérfano en cada ejecución. Se pueden listar con `sudo docker volume ls -f dangling=true`. No se debe usar `docker volume prune` si el contenedor de la base no existe, por ejemplo después de un `down`, porque en ese momento ningún contenedor referencia su volumen y según la versión de Docker podría borrarse junto con los datos.
