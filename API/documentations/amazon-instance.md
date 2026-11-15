@@ -24,7 +24,11 @@ El frontend no vive en esta instancia. Se sirve desde S3 y CloudFront, y su desp
 Hay dos archivos de entorno en la instancia, ninguno versionado:
 
 1. `~/WellProject/.env`, que docker-compose inyecta en el contenedor `api` al crearlo. Contiene la conexión a la base.
-2. `~/WellProject/API/.env`, que la API lee con `dotenv` al arrancar. Contiene, entre otras, `JWT_SECRET`, las credenciales de correo y la programación de las alertas (`ALERT_CRON_SCHEDULE`, `CRON_TIMEZONE`).
+2. `~/WellProject/API/.env`, que la API lee con `dotenv` al arrancar. Contiene, entre otras, `JWT_SECRET`, las credenciales de correo, la programación de las alertas (`ALERT_CRON_SCHEDULE`, `CRON_TIMEZONE`) y `INTERNAL_API_KEY`.
+
+El contenedor `sender` tiene su propio archivo, `~/WellProject/SENDER/wellproject/.env`, con las URL de la API (`FETCH_API_REPORTS`, `POST_API_REPORTS`) y la misma `INTERNAL_API_KEY`.
+
+`INTERNAL_API_KEY` es la clave que protege `/fetchUnsentReports` y `/repostToDGA`, las dos rutas que consume el SENDER. Debe tener al menos 32 caracteres y ser idéntica en los dos archivos; se genera con `openssl rand -hex 32`. Si falta en la API o es más corta, la API rechaza toda llamada a esas rutas, y si el SENDER no la tiene o no coincide, sus llamadas reciben 401.
 
 Algunas variables están repetidas en los dos archivos (las `DB_*`, `API_PORT` y `NODE_ENV`). Como `dotenv` no sobrescribe variables que ya existen, en esos casos gana el valor de `~/WellProject/.env`, y cambiarlas en `API/.env` no tiene efecto. La forma de aplicar un cambio también depende del archivo, como se explica en "Aplicar cambios de entorno".
 
@@ -230,6 +234,8 @@ Para `~/WellProject/.env`, en cambio, `restart` no sirve: docker-compose lee ese
 ```sh
 sudo docker-compose up -d --no-deps api
 ```
+
+Lo mismo vale para `SENDER/wellproject/.env`: hay que recrear el contenedor con `sudo docker-compose up -d --no-deps sender`. Al recrearlo se pierden el crontab y el demonio `cron`, que hay que reponer como se indica en la sección del SENDER.
 
 En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres, y el `stop_grace_period` de 3 segundos del compose puede forzar su cierre, lo que obliga a una recuperación al arrancar. Además elimina el contenedor `sender`, que el `up` siguiente crea de nuevo sin crontab ni demonio `cron`.
 

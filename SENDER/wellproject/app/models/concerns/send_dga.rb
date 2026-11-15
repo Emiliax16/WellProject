@@ -23,6 +23,8 @@ class SendDga
     uri = URI.parse("http://#{ENV['POST_API_REPORTS']}")
     http = Net::HTTP.new(uri.host, uri.port)
     request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
+    # La API exige esta clave en /repostToDGA (INTERNAL_API_KEY, la misma en los dos servicios).
+    request['X-Internal-Api-Key'] = ENV['INTERNAL_API_KEY']
     request.body = { id: report['id'] }.to_json
     response = http.request(request)
     unless response.is_a?(Net::HTTPSuccess)

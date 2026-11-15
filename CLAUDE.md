@@ -574,9 +574,9 @@ role (1) ──────< user (N)
 ### Pozos
 
 **GET** `/well`
-- **Descripción**: Obtener todos los pozos
+- **Descripción**: Obtener todos los pozos, sin credenciales DGA
 - **Response**: Array de wells
-- **Roles**: Público (pendiente protección)
+- **Auth**: Requerido (Admin). Lo usan solo consultas manuales de soporte; el portal no lo llama.
 
 **GET** `/well/:id`
 - **Descripción**: Obtener wellData de un pozo específico
@@ -614,20 +614,20 @@ role (1) ──────< user (N)
 **GET** `/fetchUnsentReports`
 - **Descripción**: Obtener reportes no enviados a DGA
 - **Response**: Array de wellData con `sent: false`
-- **Roles**: Público (usado por SENDER service)
+- **Auth**: Clave interna en el header `X-Internal-Api-Key`, igual a `INTERNAL_API_KEY`. La usa el SENDER.
 
 **POST** `/repostToDGA`
 - **Descripción**: Reenviar un reporte a DGA
 - **Body**: `{ id }` (id del wellData)
 - **Response**: Mensaje de confirmación. Responde error si la DGA rechaza el reporte, incluso por duplicado.
-- **Roles**: Público (usado por SENDER service)
+- **Auth**: Clave interna en el header `X-Internal-Api-Key`, igual a `INTERNAL_API_KEY`. La usa el SENDER.
 
 **POST** `/repostAllReportsToDGA`
 - **Descripción**: Reenviar todos los reportes seleccionados a DGA
 - **Body**: `{ reports: [{ reportId }] }`
 - **Response**: Resultado del envío
 - **Auth**: Requerido (Admin, Company, Normal). Lo usa el portal.
-- **Nota**: Extrae IDs de reportes, los busca en DB y llama a `repostToDGA`
+- **Nota**: Extrae IDs de reportes, los busca en DB y llama directamente al servicio de envío (`processAndPostData`), no a la ruta `/repostToDGA`
 
 ### Contacto
 
@@ -841,6 +841,9 @@ EMAIL_PASS=your_app_password
 ALERT_EMAIL_TO=destino@example.com
 ALERT_CRON_SCHEDULE=0 */6 * * *
 CRON_TIMEZONE=America/Santiago
+
+# Clave compartida con el SENDER (mínimo 32 caracteres: openssl rand -hex 32)
+INTERNAL_API_KEY=
 ```
 
 En producción existen dos archivos: `~/WellProject/.env`, que docker-compose inyecta al crear el contenedor, y `~/WellProject/API/.env`, que `dotenv` lee al arrancar. Las variables repetidas en ambos toman el valor del primero, porque `dotenv` no sobrescribe las que ya existen. Un cambio en `API/.env` se aplica con `docker-compose restart api`; uno en `.env` raíz requiere recrear el contenedor con `docker-compose up -d --no-deps api`.

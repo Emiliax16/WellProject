@@ -116,7 +116,13 @@ const distributorHasNoUserOrPersonAssociated = {
   message: "La distribuidora no tiene un usuario o persona asociada",
 };
 
+const invalidInternalKey = {
+  code: 401,
+  message: "Clave interna inválida.",
+};
+
 module.exports = {
+  invalidInternalKey,
   userNotFound,
   missingParams,
   missingToken,
