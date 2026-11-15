@@ -6,7 +6,7 @@
 // sin serializarla), y la segunda no lanza ningún error.
 
 const { Sequelize, DataTypes } = require('sequelize');
-const { respuestaDePozo, CAMPOS_PUBLICOS_WELL } = require('../../src/utils/well-response.util');
+const { respuestaDePozo, conClaveDgaOculta, CAMPOS_PUBLICOS_WELL } = require('../../src/utils/well-response.util');
 
 // No abre conexión: define el modelo y nada más.
 const Well = require('../../models/well')(new Sequelize({ dialect: 'postgres' }), DataTypes);
@@ -78,5 +78,32 @@ describe('respuestaDePozo', () => {
 
       expect(noPublicadas.sort()).toEqual(['password', 'rutEmpresa', 'rutUsuario']);
     });
+  });
+});
+
+describe('conClaveDgaOculta', () => {
+  it('enmascara la contraseña de una instancia de Sequelize', () => {
+    const resultado = conClaveDgaOculta(Well.build(COLUMNAS));
+
+    expect(resultado.password).toBe('********');
+    expect(resultado).toMatchObject({ code: 'ABC123', rutEmpresa: '76123456-7', rutUsuario: '12345678-9' });
+  });
+
+  it('enmascara la contraseña de un objeto plano sin modificar el original', () => {
+    const original = { ...COLUMNAS };
+
+    const resultado = conClaveDgaOculta(original);
+
+    expect(resultado.password).toBe('********');
+    expect(original.password).toBe('secreto-dga');
+  });
+
+  it('conserva el valor vacío cuando el pozo no tiene contraseña', () => {
+    expect(conClaveDgaOculta({ ...COLUMNAS, password: null }).password).toBeNull();
+    expect(conClaveDgaOculta({ ...COLUMNAS, password: '' }).password).toBe('');
+  });
+
+  it('rechaza un listado, que de otro modo saldría mal formado sin error', () => {
+    expect(() => conClaveDgaOculta([COLUMNAS])).toThrow(TypeError);
   });
 });
