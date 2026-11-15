@@ -9,6 +9,9 @@
 // frenar abusos. La cantidad de claves está acotada para que nadie pueda
 // agotar la memoria probando valores distintos.
 const crearLimitador = ({ maximo, ventanaMs, maxClaves = 10_000 }) => {
+  if (!(maxClaves > 0)) {
+    throw new RangeError('maxClaves debe ser mayor que 0');
+  }
   const registros = new Map(); // clave -> { cuenta, desde }
 
   const vigente = (clave, ahora) => {

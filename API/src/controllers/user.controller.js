@@ -22,7 +22,24 @@ const intentosFallidosLogin = crearLimitador({ maximo: 5, ventanaMs: 15 * 60 * 1
 // incorrecta: si no, el tiempo de respuesta delataría qué correos existen.
 const HASH_DE_RELLENO = "$2a$10$yrZgwR8TuODmjnBx.ZafnO1uuQaSk9AJeSyphslWjzhJ9qC7sPZTe";
 
-const claveDeLogin = (email) => String(email ?? "").trim().toLowerCase();
+const claveDeLogin = (email) => email.trim().toLowerCase();
+
+// `validateParams` declara `type: 'string'` pero no lo comprueba, así que el
+// body puede traer un array, un número o un objeto. Hay que rechazarlos antes de
+// tocar el limitador o la base:
+// - un correo en array cambia la clave del límite en cada intento, pero
+//   Sequelize lo convierte en `IN (...)` y encuentra igual a la víctima;
+// - una contraseña que no es texto hace que bcrypt falle al instante solo
+//   cuando el correo existe, y el tiempo de respuesta lo delata;
+// - un correo de varios MB se guardaría como clave del limitador.
+// Se responde el mismo 401, sin registrar el intento.
+const LARGO_MAXIMO_CORREO = 254;
+const LARGO_MAXIMO_CONTRASENA = 1024;
+const credencialesConFormatoValido = (email, password) =>
+  typeof email === "string" &&
+  typeof password === "string" &&
+  email.length <= LARGO_MAXIMO_CORREO &&
+  password.length <= LARGO_MAXIMO_CONTRASENA;
 const checkPermissionsForClientResources = require("../utils/check-permissions");
 const company = require("../../models/company");
 const distributor = require("../../models/distributor");
@@ -459,6 +476,9 @@ const registerUser = async (req, res, next) => {
 const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    if (!credencialesConFormatoValido(email, password)) {
+      throw new ErrorHandler(invalidCredentials);
+    }
     const clave = claveDeLogin(email);
     if (intentosFallidosLogin.bloqueado(clave)) {
       throw new ErrorHandler(tooManyLoginAttempts);
@@ -468,7 +488,7 @@ const loginUser = async (req, res, next) => {
     // contraseña es incorrecta, para no revelar qué correos están registrados.
     const isValid = user
       ? await user.checkPassword(password)
-      : (await comparePassword(String(password ?? ""), HASH_DE_RELLENO), false);
+      : (await comparePassword(password, HASH_DE_RELLENO), false);
     if (!user || !isValid) {
       intentosFallidosLogin.registrar(clave);
       throw new ErrorHandler(invalidCredentials);

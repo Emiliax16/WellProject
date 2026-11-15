@@ -62,14 +62,22 @@ describe('crearLimitador', () => {
   });
 
   it('libera primero las claves vencidas al hacer espacio', () => {
-    const limitador = crearLimitador({ maximo: 1, ventanaMs: 60_000, maxClaves: 2 });
-    limitador.registrar('vieja');
+    // Con dos claves vencidas, hacer espacio debe borrar las dos. Si solo se
+    // expulsara la más antigua, quedarían tres claves.
+    const limitador = crearLimitador({ maximo: 1, ventanaMs: 60_000, maxClaves: 3 });
+    limitador.registrar('vieja-1');
+    limitador.registrar('vieja-2');
     jest.advanceTimersByTime(60_000);
     limitador.registrar('reciente');
 
     limitador.registrar('nueva');
 
+    expect(limitador.cantidadDeClaves()).toBe(2);
     expect(limitador.bloqueado('reciente')).toBe(true);
     expect(limitador.bloqueado('nueva')).toBe(true);
+  });
+
+  it('rechaza una configuración sin espacio para claves', () => {
+    expect(() => crearLimitador({ maximo: 1, ventanaMs: 1000, maxClaves: 0 })).toThrow(RangeError);
   });
 });

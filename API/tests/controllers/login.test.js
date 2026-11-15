@@ -141,6 +141,37 @@ describe('loginUser', () => {
     expect(res.statusCode).toBe(201);
   });
 
+  it('no permite evitar el límite enviando el correo dentro de un array', async () => {
+    // Sequelize convertiría el array en `IN (...)` y encontraría a la víctima,
+    // mientras la clave del límite cambiaría en cada intento.
+    mockFindOne.mockResolvedValue(hacerUsuario());
+    for (let i = 0; i < 5; i += 1) await intentar('clave-incorrecta');
+
+    const { error } = await intentar('clave-correcta', [CORREO, `variante-${Math.random()}`]);
+
+    expect(error.statusCode).toBe(401);
+    expect(mockFindOne).toHaveBeenCalledTimes(5);
+  });
+
+  it.each([
+    ['un correo en array', [CORREO, 'otro'], 'clave-correcta'],
+    ['una contraseña numérica', CORREO, 123],
+    ['una contraseña booleana', CORREO, true],
+    ['una contraseña en array', CORREO, ['clave-correcta']],
+    ['un correo de más de 254 caracteres', `${'a'.repeat(250)}@x.cl`, 'clave-correcta'],
+    ['una contraseña de más de 1024 caracteres', CORREO, 'a'.repeat(1025)],
+  ])('rechaza %s sin consultar la base ni registrar el intento', async (_caso, email, password) => {
+    mockFindOne.mockResolvedValue(hacerUsuario());
+
+    const { error } = await intentar(password, email);
+
+    expect(error.statusCode).toBe(401);
+    expect(error.message).toBe('Correo o contraseña incorrectos.');
+    expect(mockFindOne).not.toHaveBeenCalled();
+    expect(mockComparePassword).not.toHaveBeenCalled();
+    expect(_intentosFallidosLogin?.cantidadDeClaves?.() ?? 0).toBe(0);
+  });
+
   it('sigue rechazando a un usuario inactivo con la contraseña correcta', async () => {
     mockFindOne.mockResolvedValue(hacerUsuario({ activo: false }));
 

@@ -95,3 +95,9 @@ Por eso el login limita por cuenta y el formulario de contacto tiene un límite
 global (`src/utils/rate-limit.util.js`, en memoria). Si se configura Nginx para
 enviar `X-Forwarded-For` y la API para confiar en él (`trust proxy`), se podría
 limitar también por IP.
+
+**Cualquiera que conozca un correo puede bloquear esa cuenta.** Con 5 intentos
+fallidos cada 15 minutos, una cuenta queda sin poder entrar mientras dure el
+abuso, incluida una de admin. Es el costo de limitar por cuenta sin conocer la
+IP. Con `X-Forwarded-For` se podría usar IP y correo como clave, y dejar un tope
+más holgado solo por correo.
