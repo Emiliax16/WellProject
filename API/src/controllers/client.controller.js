@@ -230,10 +230,11 @@ const getOneWell = async (req, res, next) => {
       throw new ErrorHandler(wellNotFound);
     }
 
-    // Devuelve `rutEmpresa` y `rutUsuario` a propósito: es la ruta que alimenta
-    // el formulario de edición del portal, y `wellForm.js` los rellena con
-    // `defaultValue` desde esta respuesta. `password` va enmascarado, porque el
-    // portal solo necesita saber si existe.
+    // Devuelve `rutEmpresa` y `rutUsuario`, igual que el listado de pozos del
+    // cliente. Es el listado el que alimenta el formulario de edición: el portal
+    // pasa ese pozo a `EditWell.js` por `location.state`, y `wellForm.js` usa los
+    // RUT como valor inicial. `password` va enmascarado en las dos rutas, porque
+    // el portal solo necesita saber si existe.
     res.json(conClaveDgaOculta(well));
   } catch (error) {
     next(error);

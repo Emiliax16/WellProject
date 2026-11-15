@@ -19,8 +19,9 @@ const soloCampos = require('./only-fields.util');
 //   porque el `include` no excluye atributos.
 //
 // Ojo con el alcance: los listados por cliente (`/clients/:id/wells`) y el
-// detalle de un pozo siguen devolviendo `rutEmpresa` y `rutUsuario` a propósito,
-// porque `wellForm.js` los rellena con `defaultValue` desde esa respuesta.
+// detalle de un pozo siguen devolviendo `rutEmpresa` y `rutUsuario` a propósito.
+// El portal pasa el pozo del listado al formulario de edición, y `wellForm.js`
+// usa los RUT como valor inicial.
 //
 // `password` no sale nunca en claro. En esas rutas va enmascarado con
 // `conClaveDgaOculta`, porque el portal solo necesita saber si existe: habilita
