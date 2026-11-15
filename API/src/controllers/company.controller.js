@@ -8,10 +8,34 @@ const Company = db.company;
 const User = db.user;
 const Person = db.person;
 const Client = db.client;
+const Distributor = db.distributor;
+
+// El listado se acota al alcance de quien consulta en vez de rechazar: un admin
+// sigue viendo todas, una distribuidora sólo las suyas y una empresa sólo la
+// propia. Antes cualquier empresa recibía las demás con su usuario asociado.
+//
+// Devuelve `null` cuando quien consulta no gestiona ninguna empresa. Ojo con
+// resolverlo como `{ distributorId: null }`: ese filtro trae justamente todas
+// las empresas sin distribuidora.
+const alcanceDeEmpresas = async (user) => {
+  if (user.type === 'admin') {
+    return {};
+  }
+  if (user.type === 'distributor') {
+    const distributor = await Distributor.findOne({ where: { userId: user.id } });
+    return distributor ? { distributorId: distributor.id } : null;
+  }
+  return { userId: user.id };
+}
 
 const getAllCompanies = async (req, res, next) => {
   try {
+    const alcance = await alcanceDeEmpresas(req.user);
+    if (!alcance) {
+      return res.json([]);
+    }
     const companies = await Company.findAll({
+      where: alcance,
       include: [
         {
           model: User,
@@ -49,7 +73,11 @@ const getCompanyInfo = async (req, res, next) => {
     if (!company) {
       throw new ErrorHandler(companyNotFound)
     }
- 
+
+    if (!await checkPermissionsForClientResources(req.user, company)) {
+      throw new ErrorHandler(unauthorized)
+    }
+
     res.json(company)
   } catch (error) {
     next(error)
@@ -58,6 +86,14 @@ const getCompanyInfo = async (req, res, next) => {
 
 const addClientToCompany = async (req, res, next) => {
   try {
+      // Asignar o quitar clientes decide a qué empresa pertenecen, y con eso
+      // quién puede leer sus credenciales DGA o cambiarles la contraseña. Sólo
+      // un admin puede hacerlo; la ruta ya lo exige y esto lo repite por si
+      // alguien la vuelve a abrir.
+      if (req.user.type !== 'admin') {
+          throw new ErrorHandler(unauthorized)
+      }
+
       const { id, clientId } = req.params
 
       const company = await Company.findByPk(id)
@@ -71,7 +107,6 @@ const addClientToCompany = async (req, res, next) => {
       }
 
       await client.update({ companyId: id })
-      console.log(client)
       res.json({ message: `Cliente ${clientId} fue agregado a la compañia ${id}` })
   } catch (error) {
       next(error)
@@ -80,6 +115,12 @@ const addClientToCompany = async (req, res, next) => {
 
 const removeClientFromCompany = async (req, res, next) => {
   try {
+      // Igual que al asignar: quitar un cliente de su empresa cambia quién
+      // puede gestionarlo. Sólo un admin puede hacerlo.
+      if (req.user.type !== 'admin') {
+          throw new ErrorHandler(unauthorized)
+      }
+
       const { id, clientId } = req.params
 
       const company = await Company.findByPk(id)
@@ -131,6 +172,9 @@ const getAllCompanyClients = async (req, res, next) => {
     )
     if (!company) {
         throw new ErrorHandler(companyNotFound)
+    }
+    if (!await checkPermissionsForClientResources(req.user, company)) {
+        throw new ErrorHandler(unauthorized)
     }
     const clients = await company.getClients({
       include: [
@@ -202,6 +246,13 @@ const editCompany = async (req, res, next) => {
     }
 
     assertCanChangeRole(req.user, user, req.body);
+
+    // `distributorId` decide de qué distribuidora cuelga la empresa, y con eso
+    // quién ve sus clientes. Sólo un admin lo cambia; para el resto se ignora,
+    // igual que cualquier campo no editable.
+    if (req.user.type !== 'admin') {
+      delete req.body.distributorId;
+    }
 
     const password = req.body.encrypted_password;
 

@@ -53,6 +53,9 @@ const getDistributorInfo = async (req, res, next) => {
     if (!distributor) {
       throw new ErrorHandler(distributorNotFound);
     }
+    if (!(await checkPermissionsForClientResources(req.user, distributor))) {
+      throw new ErrorHandler(unauthorized);
+    }
 
     res.json(distributor);
   } catch (error) {
@@ -62,6 +65,13 @@ const getDistributorInfo = async (req, res, next) => {
 
 const addCompanyToDistributor = async (req, res, next) => {
   try {
+    // Asignar o quitar empresas decide de qué distribuidora cuelgan, y con eso
+    // quién ve sus clientes y puede editarlas. Sólo un admin puede hacerlo; la
+    // ruta ya lo exige y esto lo repite por si alguien la vuelve a abrir.
+    if (req.user.type !== "admin") {
+      throw new ErrorHandler(unauthorized);
+    }
+
     const { id, companyId } = req.params;
 
     const distributor = await Distributor.findByPk(id);
@@ -75,7 +85,6 @@ const addCompanyToDistributor = async (req, res, next) => {
     }
 
     await company.update({ distributorId: id });
-    console.log(company);
     res.json({
       message: `Compañía ${companyId} fue agregado a la distribuidora ${id}`,
     });
@@ -86,6 +95,13 @@ const addCompanyToDistributor = async (req, res, next) => {
 
 const removeCompanyFromDistributor = async (req, res, next) => {
   try {
+    // Asignar o quitar empresas decide de qué distribuidora cuelgan, y con eso
+    // quién ve sus clientes y puede editarlas. Sólo un admin puede hacerlo; la
+    // ruta ya lo exige y esto lo repite por si alguien la vuelve a abrir.
+    if (req.user.type !== "admin") {
+      throw new ErrorHandler(unauthorized);
+    }
+
     const { id, companyId } = req.params;
 
     const distributor = await Distributor.findByPk(id);
@@ -137,6 +153,9 @@ const getAllDistributorCompanies = async (req, res, next) => {
     });
     if (!distributor) {
       throw new ErrorHandler(distributorNotFound);
+    }
+    if (!(await checkPermissionsForClientResources(req.user, distributor))) {
+      throw new ErrorHandler(unauthorized);
     }
     const companies = await distributor.getCompanies({
       include: [
