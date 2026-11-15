@@ -409,6 +409,7 @@ role (1) ──────< user (N)
 - **Descripción**: Autenticación de usuario
 - **Body**: `{ email, password }`
 - **Response**: `{ user, token }` (JWT con expiración 24h)
+- **Errores**: 401 "Correo o contraseña incorrectos." tanto si el correo no existe como si la contraseña falla (mismo tiempo de respuesta); 429 tras 5 intentos fallidos de la misma cuenta en 15 minutos
 - **Roles**: Público
 
 **POST** `/users/register`
@@ -631,11 +632,11 @@ role (1) ──────< user (N)
 
 ### Contacto
 
-**POST** `/contactUs`
+**POST** `/send-email`
 - **Descripción**: Enviar formulario de contacto de landing page
-- **Body**: `{ name, email, message }`
-- **Response**: Email enviado (vía nodemailer)
-- **Roles**: Público
+- **Body**: `{ name, email, message }` (texto; nombre hasta 100, correo válido hasta 254, mensaje hasta 5000 caracteres)
+- **Response**: `{ success: true, message }`; 400 si un campo no es válido, 429 si se superan 10 envíos por hora en total, 500 sin detalles si falla el envío
+- **Roles**: Público. Despacha desde la misma cuenta de Gmail que las alertas de pozos.
 
 ## Autenticación y Autorización
 

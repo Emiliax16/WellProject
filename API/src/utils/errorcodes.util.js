@@ -116,12 +116,24 @@ const distributorHasNoUserOrPersonAssociated = {
   message: "La distribuidora no tiene un usuario o persona asociada",
 };
 
+const invalidCredentials = {
+  code: 401,
+  message: "Correo o contraseña incorrectos.",
+};
+
+const tooManyLoginAttempts = {
+  code: 429,
+  message: "Demasiados intentos fallidos. Intenta de nuevo en 15 minutos.",
+};
+
 const invalidInternalKey = {
   code: 401,
   message: "Clave interna inválida.",
 };
 
 module.exports = {
+  invalidCredentials,
+  tooManyLoginAttempts,
   invalidInternalKey,
   userNotFound,
   missingParams,

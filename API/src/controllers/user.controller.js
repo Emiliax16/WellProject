@@ -3,10 +3,26 @@ const client = require("../../models/client");
 const ErrorHandler = require("../utils/error.util");
 const {
   userNotFound,
-  passwordsDontMatch,
   unauthorized,
   clientNotFound,
+  invalidCredentials,
+  tooManyLoginAttempts,
 } = require("../utils/errorcodes.util");
+const { comparePassword } = require("../utils/auth.util");
+const crearLimitador = require("../utils/rate-limit.util");
+
+// Intentos fallidos de login por cuenta: tras 5 en 15 minutos, esa cuenta queda
+// bloqueada hasta que pase la ventana. El límite va por correo y no por IP,
+// porque Nginx no reenvía la IP del cliente y un límite por IP bloquearía a
+// todos los usuarios a la vez.
+const intentosFallidosLogin = crearLimitador({ maximo: 5, ventanaMs: 15 * 60 * 1000 });
+
+// Hash bcrypt de un texto aleatorio descartado. Cuando el correo no existe, se
+// compara contra él para que la respuesta tarde lo mismo que con una contraseña
+// incorrecta: si no, el tiempo de respuesta delataría qué correos existen.
+const HASH_DE_RELLENO = "$2a$10$yrZgwR8TuODmjnBx.ZafnO1uuQaSk9AJeSyphslWjzhJ9qC7sPZTe";
+
+const claveDeLogin = (email) => String(email ?? "").trim().toLowerCase();
 const checkPermissionsForClientResources = require("../utils/check-permissions");
 const company = require("../../models/company");
 const distributor = require("../../models/distributor");
@@ -443,14 +459,21 @@ const registerUser = async (req, res, next) => {
 const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const clave = claveDeLogin(email);
+    if (intentosFallidosLogin.bloqueado(clave)) {
+      throw new ErrorHandler(tooManyLoginAttempts);
+    }
     const user = await User.findOne({ where: { email } });
-    if (!user) {
-      throw new ErrorHandler(userNotFound);
+    // Mismo mensaje y mismo tiempo de respuesta si el correo no existe o si la
+    // contraseña es incorrecta, para no revelar qué correos están registrados.
+    const isValid = user
+      ? await user.checkPassword(password)
+      : (await comparePassword(String(password ?? ""), HASH_DE_RELLENO), false);
+    if (!user || !isValid) {
+      intentosFallidosLogin.registrar(clave);
+      throw new ErrorHandler(invalidCredentials);
     }
-    const isValid = await user.checkPassword(password);
-    if (!isValid) {
-      throw new ErrorHandler(passwordsDontMatch);
-    }
+    intentosFallidosLogin.reiniciar(clave);
     const role = await user.getRole();
     if (role.type !== "admin" && !user.isActived) {
       throw new ErrorHandler(unauthorized);
@@ -494,6 +517,8 @@ const getAllUserRoles = async (req, res, next) => {
 };
 
 module.exports = {
+  // Solo para tests: permite reiniciar el estado entre casos.
+  _intentosFallidosLogin: intentosFallidosLogin,
   getUsers,
   getUserInfo,
   getUserInfoById,

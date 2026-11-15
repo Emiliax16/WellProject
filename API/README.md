@@ -67,8 +67,8 @@ Estos endpoints quedan abiertos:
 |---|---|---|
 | `POST /wellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
 | `POST /massImportWellData` | dispositivos IoT (Layrz) | no tienen forma de autenticarse |
-| `POST /users/login` | portal | es el que emite el token |
-| `POST /send-email` | landing page | formulario de contacto público |
+| `POST /users/login` | portal | es el que emite el token; bloquea una cuenta tras 5 intentos fallidos en 15 minutos |
+| `POST /send-email` | landing page | formulario de contacto público; valida los campos y acepta como máximo 10 envíos por hora en total |
 | `GET /placeholder` | ninguno | ruta de ejemplo |
 
 Los dos primeros deberían pasar a validar un secreto o a restringirse por IP.
@@ -89,12 +89,9 @@ portal ni los dispositivos lo usan.
 /massImportWellData` aceptan reportes de cualquiera que conozca el `code` de un
 pozo. Ese código viaja en las respuestas de varios endpoints del portal.
 
-**`POST /send-email` es un relay de correo abierto.** No tiene rate limit ni
-captcha, y despacha desde la cuenta de Gmail configurada en `EMAIL_USER`. Abusarlo
-puede terminar con la cuenta bloqueada por Google.
-
-**Ni el borrado masivo ni el reenvío validan pertenencia.**
-`DELETE /wellData/bulk` y `POST /repostAllReportsToDGA` operan sobre los `id` que
-reciben sin comprobar que los reportes sean de un pozo del cliente que hace la
-petición. Exigen sesión, pero cualquier usuario autenticado puede tocar reportes
-de otro cliente. Los `id` son autoincrementales, así que no hay que adivinarlos.
+**Los límites no van por IP.** Nginx no reenvía la IP del cliente, así que para
+la API todas las peticiones llegan desde la misma dirección interna de Docker.
+Por eso el login limita por cuenta y el formulario de contacto tiene un límite
+global (`src/utils/rate-limit.util.js`, en memoria). Si se configura Nginx para
+enviar `X-Forwarded-For` y la API para confiar en él (`trust proxy`), se podría
+limitar también por IP.
