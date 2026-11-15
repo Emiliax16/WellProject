@@ -1,6 +1,19 @@
 # WellProject Main App - SENDER
 
-Lógica principal de obtención de reportes no envíados y envíos iterativos cada 15 segundos. Toda la lógica se basa principalmente en el uso de la gema `whenever`, la cual inicia un cron job que es capaz de ejecutarse todos los días a las 6am, e intenta realizar todos los envíos pendientes.
+Lógica principal de obtención de reportes no enviados y reenvío a la DGA. La tarea `rake sender:fetch_unsent_and_send` pide a la API una página de hasta 100 reportes pendientes (`/fetchUnsentReports`) y le solicita reenviarlos uno por uno (`/repostToDGA`), con 5 minutos de espera entre cada envío, según la documentación de transmisión de la DGA. La programación se define con la gema `whenever` en `config/schedule.rb`.
+
+## Advertencias de operación
+
+En el `config/schedule.rb` versionado, todos los bloques `every` están comentados, así que `whenever --update-crontab` no programa nada con el archivo tal como está en el repositorio. En producción, el job diario existe solo porque la instancia tiene un cambio local que descomenta el bloque de la tarea rake. La hora del job es la del contenedor, que no define zona horaria y usa UTC.
+
+Además, el crontab y el servicio `cron` viven dentro del contenedor y no forman parte de su proceso principal, que solo levanta Puma. El crontab se pierde si el contenedor se recrea, y el servicio `cron` también se pierde cuando el contenedor se reinicia. Los pasos de instalación de este README sirven para un entorno local. Para revisar o reactivar el cron en producción, sin reconstruir imágenes ni levantar todo el stack, hay que seguir la sección del SENDER en `API/documentations/amazon-instance.md`.
+
+Antes de reactivarlo hay que considerar dos comportamientos:
+
+1. La tarea se detiene ante la primera respuesta de error de `/repostToDGA`, de modo que un solo reporte rechazado impide reenviar los siguientes.
+2. Los pozos pueden enviar más de un reporte por hora, y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Esos reportes figuran como no enviados y harán fallar la tarea si no se filtran.
+
+Está planificado reemplazar este servicio por un cron en la API.
 
 La documentación completa de cómo se compone el cron job utilizado y cómo actualizarlo se encuentra en este [link](wellproject/README.md).
 

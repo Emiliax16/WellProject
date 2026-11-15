@@ -10,7 +10,7 @@ Tecnologías utilizadas:
 * PostgreSQL (Base de datos)
 * Docker (Para la configuración del entorno)
 2. SENDER (Servicio de Envío en Ruby on Rails)
-Descripción: Servicio encargado de enviar los reportes no enviados a la DGA. Este servicio se ejecuta de manera programada (cron job) para asegurarse de que los reportes se envíen automáticamente en el formato correcto y en los intervalos de tiempo definidos.
+Descripción: Servicio encargado de reenviar a la DGA los reportes que no se enviaron al momento de recibirse. Se ejecuta mediante un cron job cuya programación, crontab y demonio dependen de pasos manuales en la instancia, como se explica en [SENDER](SENDER/README.md).
 Tecnologías utilizadas:
 * Ruby on Rails
 * Whenever (para la programación de cron jobs)
@@ -23,3 +23,7 @@ Tecnologías utilizadas:
 Cada servicio consta de una documentación completa:
 * [API](API/README.md)
 * [SENDER](SENDER/README.md)
+
+## Producción
+
+La API, la base de datos y el SENDER corren en una instancia EC2 que se actualiza a mano. Cómo revisarla, desplegar, volver atrás y consultar la base sin riesgo está documentado en [Operación de la instancia de producción](API/documentations/amazon-instance.md).
