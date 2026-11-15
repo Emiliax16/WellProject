@@ -617,16 +617,16 @@ role (1) ──────< user (N)
 - **Roles**: Público (usado por SENDER service)
 
 **POST** `/repostToDGA`
-- **Descripción**: Reenviar reportes específicos a DGA
-- **Body**: `{ reports: [wellData objects] }`
-- **Response**: Resultado del envío
+- **Descripción**: Reenviar un reporte a DGA
+- **Body**: `{ id }` (id del wellData)
+- **Response**: Mensaje de confirmación. Responde error si la DGA rechaza el reporte, incluso por duplicado.
 - **Roles**: Público (usado por SENDER service)
 
 **POST** `/repostAllReportsToDGA`
 - **Descripción**: Reenviar todos los reportes seleccionados a DGA
 - **Body**: `{ reports: [{ reportId }] }`
 - **Response**: Resultado del envío
-- **Roles**: Público (usado por frontend)
+- **Auth**: Requerido (Admin, Company, Normal). Lo usa el portal.
 - **Nota**: Extrae IDs de reportes, los busca en DB y llama a `repostToDGA`
 
 ### Contacto
@@ -795,7 +795,7 @@ function errorHandler(err, req, res, next) {
 
 **Credenciales DGA**: son propias de cada pozo y se guardan en `wells.rutEmpresa`, `wells.rutUsuario` y `wells.password`. El MOP las entrega una sola vez y no se pueden rotar, por lo que no deben aparecer en respuestas HTTP ni en logs. Las variables `DGA_*` de las plantillas antiguas no se usan.
 
-**Rechazo por duplicado**: los pozos envían dos reportes por hora y la DGA rechaza el segundo con "Ya existe un registro en esa fecha, hora para la obra". Ese reporte queda con `sent = false` aunque la hora sí quedó registrada.
+**Rechazo por duplicado**: los pozos pueden enviar más de un reporte por hora y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Ese reporte queda con `sent = false` aunque la hora sí quedó registrada.
 
 ### Servicio SENDER (Ruby on Rails)
 
@@ -807,7 +807,7 @@ function errorHandler(err, req, res, next) {
 3. Enviar a DGA
 4. Actualizar estado de reportes
 
-**Programación**: Configurado con `whenever` gem. El servicio `cron` se inicia a mano dentro del contenedor y se pierde cada vez que este se reinicia o se recrea; en noviembre de 2026 llevaba detenido desde el 11 de agosto. Además, aborta el lote ante el primer rechazo de la DGA.
+**Programación**: Configurado con `whenever` gem, pero en el `schedule.rb` versionado todos los bloques `every` están comentados. En producción, el job diario existe solo por un cambio local sin commitear que lo descomenta. Además, el crontab y el demonio `cron` se instalan e inician a mano dentro del contenedor y se pierden al recrearlo o reiniciarlo, la hora es UTC, cada ejecución procesa como máximo una página de 100 reportes y aborta ante el primer rechazo de la DGA. Detalle en `API/documentations/amazon-instance.md`.
 
 **Documentación**: Ver `SENDER/README.md` y `API/documentations/amazon-instance.md`
 
@@ -843,7 +843,7 @@ ALERT_CRON_SCHEDULE=0 */6 * * *
 CRON_TIMEZONE=America/Santiago
 ```
 
-En producción existen dos archivos: `~/WellProject/.env`, que docker-compose inyecta en el contenedor, y `~/WellProject/API/.env`, que `dotenv` lee al arrancar. Un cambio en ellos requiere reiniciar la API.
+En producción existen dos archivos: `~/WellProject/.env`, que docker-compose inyecta al crear el contenedor, y `~/WellProject/API/.env`, que `dotenv` lee al arrancar. Las variables repetidas en ambos toman el valor del primero, porque `dotenv` no sobrescribe las que ya existen. Un cambio en `API/.env` se aplica con `docker-compose restart api`; uno en `.env` raíz requiere recrear el contenedor con `docker-compose up -d --no-deps api`.
 
 ### Configuración de Sequelize
 
@@ -999,14 +999,15 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 ```json
 {
   "scripts": {
-    "test": "jest"
+    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models",
+    "test:models": "NODE_ENV=test jest tests/models"
   }
 }
 ```
 
 **Faker**: `@faker-js/faker` para generar datos de prueba
 
-**Estado actual**: Setup básico, cobertura mínima (oportunidad de mejora)
+**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`.
 
 ## Deployment
 

@@ -1,21 +1,19 @@
 # WellProject Main App - SENDER
 
-Lógica principal de obtención de reportes no enviados y reenvío a la DGA. Se basa en la gema `whenever`, que instala un cron job diario a las 6:00 (`rake sender:fetch_unsent_and_send`). La tarea pide a la API los reportes pendientes (`/fetchUnsentReports`) y le solicita reenviarlos uno por uno (`/repostToDGA`), con 5 minutos de espera entre cada envío, según la documentación de transmisión de la DGA.
+Lógica principal de obtención de reportes no enviados y reenvío a la DGA. La tarea `rake sender:fetch_unsent_and_send` pide a la API una página de hasta 100 reportes pendientes (`/fetchUnsentReports`) y le solicita reenviarlos uno por uno (`/repostToDGA`), con 5 minutos de espera entre cada envío, según la documentación de transmisión de la DGA. La programación se define con la gema `whenever` en `config/schedule.rb`.
 
 ## Advertencias de operación
 
-El servicio `cron` no forma parte del proceso principal del contenedor, que solo levanta Puma. Se inicia a mano con `service cron start`, como se describe más abajo, y se pierde cada vez que el contenedor se reinicia o se recrea. Por eso, después de cualquier reinicio del contenedor `sender`, hay que comprobar que el cron siga activo:
+En el `config/schedule.rb` versionado, todos los bloques `every` están comentados, así que `whenever --update-crontab` no programa nada con el archivo tal como está en el repositorio. En producción, el job diario existe solo porque la instancia tiene un cambio local que descomenta el bloque de la tarea rake. La hora del job es la del contenedor, que no define zona horaria y usa UTC.
 
-```sh
-sudo docker exec sender sh -c 'ls /proc | grep -E "^[0-9]+$" | while read p; do cat /proc/$p/comm 2>/dev/null; done | grep -c cron'
-```
+Además, el crontab y el servicio `cron` viven dentro del contenedor y no forman parte de su proceso principal, que solo levanta Puma. El crontab se pierde si el contenedor se recrea, y el servicio `cron` también se pierde cuando el contenedor se reinicia. Los pasos de instalación de este README sirven para un entorno local. Para revisar o reactivar el cron en producción, sin reconstruir imágenes ni levantar todo el stack, hay que seguir la sección del SENDER en `API/documentations/amazon-instance.md`.
 
-Si el resultado es `0`, el cron no está corriendo. Además, hay dos comportamientos que se deben considerar antes de reactivarlo:
+Antes de reactivarlo hay que considerar dos comportamientos:
 
 1. La tarea se detiene ante la primera respuesta de error de `/repostToDGA`, de modo que un solo reporte rechazado impide reenviar los siguientes.
-2. Los pozos envían dos reportes por hora y la DGA rechaza el segundo con "Ya existe un registro en esa fecha, hora para la obra". Esos reportes figuran como no enviados y harán fallar la tarea si no se filtran.
+2. Los pozos pueden enviar más de un reporte por hora, y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Esos reportes figuran como no enviados y harán fallar la tarea si no se filtran.
 
-En noviembre de 2026 el cron estaba detenido desde el reinicio del 11 de agosto, y su último registro era de marzo de 2025. Está planificado reemplazar este servicio por un cron en la API.
+Está planificado reemplazar este servicio por un cron en la API.
 
 La documentación completa de cómo se compone el cron job utilizado y cómo actualizarlo se encuentra en este [link](wellproject/README.md).
 
