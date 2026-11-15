@@ -21,7 +21,9 @@ class Sender < ApplicationRecord
 
     def self.fetch_reports
       uri = URI.parse("http://#{ENV['FETCH_API_REPORTS']}")
-      response = Net::HTTP.get_response(uri)
+      request = Net::HTTP::Get.new(uri)
+      request['X-Internal-Api-Key'] = ENV['INTERNAL_API_KEY']
+      response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
       if response.is_a?(Net::HTTPSuccess) && response.body['reports'].present?
         json_response = JSON.parse(response.body)
         json_response['reports'].values
