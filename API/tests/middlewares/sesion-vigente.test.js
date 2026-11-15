@@ -44,13 +44,33 @@ beforeEach(() => {
 afterEach(() => silenciar.forEach((s) => s.mockRestore()));
 
 describe('authMiddleware revalida la sesión', () => {
-  it('deja pasar a un usuario vigente y usa el rol de la base', async () => {
+  it('deja pasar a un usuario vigente', async () => {
     mockFindByPk.mockResolvedValue(usuarioEnBase({ rol: 'company' }));
 
     const { req, error } = await pasar(['admin', 'company'], { authorization: `Bearer ${tokenDe(7, 'company')}` });
 
     expect(error).toBeUndefined();
     expect(req.user).toMatchObject({ id: 7, type: 'company' });
+  });
+
+  it('deja en req.user el rol de la base y no el del token', async () => {
+    // Lo promovieron a empresa después de iniciar sesión como cliente.
+    mockFindByPk.mockResolvedValue(usuarioEnBase({ rol: 'company' }));
+
+    const { req, error } = await pasar(['company'], { authorization: `Bearer ${tokenDe(7, 'normal')}` });
+
+    expect(error).toBeUndefined();
+    expect(req.user.type).toBe('company');
+  });
+
+  it('no deja pasar la petición si falla la consulta a la base', async () => {
+    // Falla cerrado: sin poder revalidar, no se confía en el token.
+    mockFindByPk.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const { req, error } = await pasar([], { authorization: `Bearer ${tokenDe(7, 'normal')}` });
+
+    expect(error.message).toBe('connect ECONNREFUSED');
+    expect(req.user).toBeUndefined();
   });
 
   it('rechaza el token de un usuario que ya no existe', async () => {
