@@ -76,6 +76,30 @@ const normalizeHourFormat = (hour) => {
 };
 
 
+// La DGA guarda una sola medición por obra, fecha y hora. Si ya tiene una,
+// rechaza las siguientes con un 400 y este mensaje (seguido de un número de
+// comprobante). Los pozos envían más de un reporte por hora, así que el segundo
+// siempre recibe este rechazo, aunque la hora sí quedó registrada en la DGA. Lo
+// mismo pasa al reintentar un reporte que la DGA aceptó pero cuya respuesta no
+// alcanzó a llegar antes del timeout.
+//
+// Antes esos reportes quedaban con `sent = false` para siempre: inflaban los
+// pendientes, hacían fallar el reenvío manual y abortaban el lote del SENDER.
+// Ahora cuentan como enviados. La condición es estricta (400 y el texto exacto
+// al inicio) para no confundirlo con otros rechazos, como credenciales malas.
+const MENSAJE_YA_REGISTRADO = /^Ya existe un registro en esa fecha, hora para la obra\b/;
+
+const yaRegistradoEnDga = (response) =>
+  Boolean(response?.error) &&
+  Number(response?.status) === 400 &&
+  typeof response?.data?.message === "string" &&
+  MENSAJE_YA_REGISTRADO.test(response.data.message.trim());
+
+// En una respuesta exitosa el mensaje viene en `message`; en un rechazo,
+// `postToDgaV2` lo deja dentro de `data`.
+const mensajeDeRespuesta = (response) =>
+  response?.message ?? response?.data?.message ?? "sin mensaje";
+
 /**
  * @description Procesa los datos de un pozo y los envía a la DGA
  */
@@ -90,10 +114,15 @@ const processAndPostData = async (wellData, well) => {
     const formatedData = await formaDataV2(data);
     const response = await postToDgaV2(formatedData, wellData.code);
     console.log(
-      `[dga] respuesta reporte ${wellData.id} | status ${response?.status} | ${response?.message ?? "sin mensaje"}`
+      `[dga] respuesta reporte ${wellData.id} | status ${response?.status} | ${mensajeDeRespuesta(response)}`
     );
-    if (!checkValidResponseV2(response))
+    if (yaRegistradoEnDga(response)) {
+      console.log(
+        `[dga] reporte ${wellData.id} | la DGA ya tiene un registro de la obra ${wellData.code} para esa fecha y hora; se marca como enviado`
+      );
+    } else if (!checkValidResponseV2(response)) {
       throw new ErrorHandler(couldntPostToDga);
+    }
     await wellData.update({
       sent: true,
       sentDate: new moment().tz("America/Santiago").format(),

@@ -119,7 +119,7 @@ SELECT "createdAt"::date AS dia, count(*) AS recibidos, count(*) FILTER (WHERE s
 FROM "wellData" WHERE "createdAt" > now() - interval '10 days' GROUP BY 1 ORDER BY 1;
 ```
 
-Al leer el último resultado hay que considerar que los pozos pueden enviar más de un reporte por hora y la DGA rechaza los siguientes con el mensaje "Ya existe un registro en esa fecha, hora para la obra". Ese reporte queda con `sent = false`, aunque la hora sí quedó registrada en la DGA. Por lo tanto, una proporción alta de reportes no enviados no indica por sí sola una pérdida; hay que revisar los rechazos en los logs.
+Al leer el último resultado hay que considerar que los pozos pueden enviar más de un reporte por hora y la DGA rechaza los siguientes con el mensaje "Ya existe un registro en esa fecha, hora para la obra". Como la hora sí quedó registrada, la API marca ese reporte como enviado y lo deja en el log como `se marca como enviado`. Los reportes rechazados así antes de ese cambio siguen con `sent = false`, de modo que en los datos históricos una proporción alta de reportes no enviados no indica por sí sola una pérdida.
 
 ## Desplegar la API
 
@@ -276,7 +276,7 @@ sudo docker exec sender sh -c 'cd /rails && bundle exec whenever --update-cronta
 sudo docker exec -u root sender service cron start
 ```
 
-Antes de reactivarlo hay que tener presente que la tarea se detiene ante el primer error de `/repostToDGA`, y que la API responde error cuando la DGA rechaza un reporte por duplicado. Con el estado actual de los datos, la primera ejecución probablemente aborte en el primer reporte. Está planificado reemplazar este servicio por un cron en la API.
+Antes de reactivarlo hay que tener presente que la tarea se detiene ante el primer error de `/repostToDGA`. Los rechazos por duplicado ya no cuentan como error, pero cualquier otro rechazo de la DGA, como credenciales inválidas en un pozo, aborta el lote. Además, cada reporte tarda 5 minutos y los pendientes históricos incluyen muchos duplicados. Está planificado reemplazar este servicio por un cron en la API.
 
 ## Alertas de monitoreo
 

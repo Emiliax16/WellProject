@@ -11,7 +11,7 @@ Además, el crontab y el servicio `cron` viven dentro del contenedor y no forman
 Antes de reactivarlo hay que considerar dos comportamientos:
 
 1. La tarea se detiene ante la primera respuesta de error de `/repostToDGA`, de modo que un solo reporte rechazado impide reenviar los siguientes.
-2. Los pozos pueden enviar más de un reporte por hora, y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Esos reportes figuran como no enviados y harán fallar la tarea si no se filtran.
+2. Los reportes que la DGA rechazó antes por duplicado ("Ya existe un registro en esa fecha, hora para la obra") siguen figurando como no enviados. Al reenviarlos, la API ahora responde éxito, porque la hora ya está registrada, pero la tarea igual tarda 5 minutos por cada uno.
 
 Está planificado reemplazar este servicio por un cron en la API.
 
