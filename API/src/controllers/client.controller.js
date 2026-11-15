@@ -3,7 +3,7 @@ const ErrorHandler = require('../utils/error.util');
 const checkPermissionsForClientResources = require('../utils/check-permissions');
 const assertCanChangeRole = require('../utils/assert-role-change');
 const soloCampos = require('../utils/only-fields.util');
-const { respuestaDePozo } = require('../utils/well-response.util');
+const { respuestaDePozo, conClaveDgaOculta, MASCARA_CLAVE_DGA } = require('../utils/well-response.util');
 
 // Lo único que se puede escribir en un pozo desde el portal.
 //
@@ -18,6 +18,27 @@ const { respuestaDePozo } = require('../utils/well-response.util');
 const CAMPOS_EDITABLES_WELL = [
   'name', 'location', 'code', 'isActived', 'rutEmpresa', 'rutUsuario', 'password',
 ];
+
+// Las credenciales DGA no se pueden recuperar: el MOP las entrega una sola vez.
+// Por eso, al editar, un valor vacío no borra la que ya existe sino que se
+// ignora. El formulario del portal manda `password: ""` en cada guardado
+// (registra el campo sin `defaultValue`), así que antes bastaba con cambiarle
+// el nombre a un pozo para dejarlo sin credencial (issue #91).
+//
+// La máscara también se ignora: es lo que devuelven las respuestas en lugar de
+// la contraseña, y no debe terminar guardada como si fuera una.
+const sinCredencialesVacias = (cambios) => {
+  const resultado = { ...cambios };
+  for (const campo of ['password', 'rutEmpresa', 'rutUsuario']) {
+    if (!(campo in resultado)) continue;
+    const valor = resultado[campo];
+    const vacio = valor === null || valor === undefined || String(valor).trim() === '';
+    if (vacio || (campo === 'password' && valor === MASCARA_CLAVE_DGA)) {
+      delete resultado[campo];
+    }
+  }
+  return resultado;
+};
 
 // Lo único que se puede escribir al agregar una medición a mano. Fuera quedan
 // `sent` y `sentDate`, que marcarían el reporte como enviado a la DGA sin
@@ -183,7 +204,7 @@ const getClientWells = async (req, res, next) => {
       offset,
     });
 
-    res.json(wells);
+    res.json({ ...wells, rows: wells.rows.map(conClaveDgaOculta) });
 
   } catch (error) {
     next(error);
@@ -209,14 +230,12 @@ const getOneWell = async (req, res, next) => {
       throw new ErrorHandler(wellNotFound);
     }
 
-    // Devuelve las credenciales DGA a propósito: es la ruta que alimenta el
-    // formulario de edición del portal, y `wellForm.js` rellena `rutEmpresa` y
-    // `rutUsuario` con `defaultValue` desde esta respuesta.
-    //
-    // `password` es distinto: el formulario lo registra sin `defaultValue`, o
-    // sea que nunca lo usa, y sale igual. Quitarlo es el issue #91, que va
-    // aparte porque el mismo hilo esconde un problema peor.
-    res.json(well);
+    // Devuelve `rutEmpresa` y `rutUsuario`, igual que el listado de pozos del
+    // cliente. Es el listado el que alimenta el formulario de edición: el portal
+    // pasa ese pozo a `EditWell.js` por `location.state`, y `wellForm.js` usa los
+    // RUT como valor inicial. `password` va enmascarado en las dos rutas, porque
+    // el portal solo necesita saber si existe.
+    res.json(conClaveDgaOculta(well));
   } catch (error) {
     next(error);
   }
@@ -287,7 +306,7 @@ const editClientWell = async (req, res, next) => {
     const willBeActive = req.body.isActived !== undefined ? req.body.isActived : wasActive;
     const activationChanged = wasActive !== willBeActive;
 
-    await well.update(soloCampos(req.body, CAMPOS_EDITABLES_WELL));
+    await well.update(sinCredencialesVacias(soloCampos(req.body, CAMPOS_EDITABLES_WELL)));
 
     // Log activation/deactivation
     if (activationChanged) {

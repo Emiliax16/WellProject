@@ -19,11 +19,14 @@ const soloCampos = require('./only-fields.util');
 //   porque el `include` no excluye atributos.
 //
 // Ojo con el alcance: los listados por cliente (`/clients/:id/wells`) y el
-// detalle de un pozo siguen devolviendo `rutEmpresa` y `rutUsuario` a propósito,
-// porque `wellForm.js` los rellena con `defaultValue` desde esa respuesta.
+// detalle de un pozo siguen devolviendo `rutEmpresa` y `rutUsuario` a propósito.
+// El portal pasa el pozo del listado al formulario de edición, y `wellForm.js`
+// usa los RUT como valor inicial.
 //
-// `password` viaja por esas mismas rutas sin que nadie lo use: el formulario lo
-// registra sin `defaultValue`. Sacarlo de ahí es el issue #91.
+// `password` no sale nunca en claro. En esas rutas va enmascarado con
+// `conClaveDgaOculta`, porque el portal solo necesita saber si existe: habilita
+// el botón de activar con `Boolean(rutEmpresa && rutUsuario && password)`
+// (`ClientWells.js` y `WellRow.js`).
 const CAMPOS_PUBLICOS_WELL = [
   'id', 'code', 'name', 'location', 'clientId', 'isActived', 'editStatusDate',
   'createdAt', 'updatedAt',
@@ -45,4 +48,23 @@ const respuestaDePozo = (well) => {
   return soloCampos(typeof well?.toJSON === 'function' ? well.toJSON() : well, CAMPOS_PUBLICOS_WELL);
 };
 
-module.exports = { respuestaDePozo, CAMPOS_PUBLICOS_WELL };
+// Lo que reemplaza a la contraseña DGA en las respuestas cuando el pozo tiene
+// una guardada. El controlador de edición la ignora si vuelve en un body, para
+// que nunca termine guardada como contraseña.
+const MASCARA_CLAVE_DGA = '********';
+
+// Devuelve el pozo como objeto plano con `password` enmascarado. Si el pozo no
+// tiene contraseña, conserva el valor vacío tal cual, para que el portal siga
+// distinguiendo un pozo sin credencial.
+const conClaveDgaOculta = (well) => {
+  if (Array.isArray(well)) {
+    throw new TypeError('conClaveDgaOculta recibe un pozo, no un listado');
+  }
+  const plano = typeof well?.toJSON === 'function' ? well.toJSON() : { ...well };
+  if (plano.password) {
+    plano.password = MASCARA_CLAVE_DGA;
+  }
+  return plano;
+};
+
+module.exports = { respuestaDePozo, conClaveDgaOculta, MASCARA_CLAVE_DGA, CAMPOS_PUBLICOS_WELL };
