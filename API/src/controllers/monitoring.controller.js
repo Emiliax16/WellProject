@@ -15,6 +15,22 @@ const User = db.user;
 const GREEN_THRESHOLD_MINUTES = 60;
 const RED_THRESHOLD_MINUTES = 360;
 
+// La alerta automática corre una vez al día y solo avisa de los pozos que
+// pasaron a rojo desde el chequeo anterior. Un pozo que ya estaba en rojo, por
+// ejemplo por una falla de hardware conocida, no genera un correo nuevo cada
+// día: aparece al final, como recordatorio, solo cuando hay alguno nuevo.
+//
+// No guarda estado. Un pozo entra en rojo cuando pasa RED_THRESHOLD_MINUTES sin
+// reportar, así que es "nuevo" mientras ese tiempo no supere el umbral más el
+// intervalo entre chequeos. Por eso la ventana tiene que coincidir con
+// ALERT_CRON_SCHEDULE (por defecto, un chequeo diario).
+//
+// El margen cubre el desfase de segundos del cron y los días de cambio de
+// horario, que duran 23 o 25 horas: con él nunca se pierde un aviso, y a lo
+// sumo un pozo aparece como nuevo dos días seguidos.
+const ALERT_WINDOW_MINUTES = 24 * 60;
+const ALERT_MARGIN_MINUTES = 60;
+
 const parseReportDate = (wellDataRow) => {
   if (!wellDataRow) return null;
   if (wellDataRow.createdAt) return new Date(wellDataRow.createdAt);
@@ -146,10 +162,27 @@ const computeStatus = async () => {
         location: well.location,
         lastCommunication: lastReportDate ? lastReportDate.toISOString() : null,
         minutesSinceLast,
+        activatedAt: well.editStatusDate ? new Date(well.editStatusDate).toISOString() : null,
       });
     }
   }
   return { red, now };
+};
+
+// Un pozo en rojo es nuevo si cruzó el umbral dentro de la ventana del último
+// chequeo. Si nunca reportó, se mide desde que se activó; si tampoco hay fecha
+// de activación, no hay forma de saber cuándo pasó a rojo y se trata como
+// conocido para no repetirlo todos los días.
+const esRojoNuevo = (pozo, now) => {
+  const limite = RED_THRESHOLD_MINUTES + ALERT_WINDOW_MINUTES + ALERT_MARGIN_MINUTES;
+  if (pozo.minutesSinceLast !== null && pozo.minutesSinceLast !== undefined) {
+    return pozo.minutesSinceLast <= limite;
+  }
+  if (!pozo.activatedAt) {
+    return false;
+  }
+  const minutosDesdeActivacion = Math.floor((now.getTime() - new Date(pozo.activatedAt).getTime()) / 60000);
+  return minutosDesdeActivacion > RED_THRESHOLD_MINUTES && minutosDesdeActivacion <= limite;
 };
 
 const formatDateForEmail = (isoString) => {
@@ -162,7 +195,7 @@ const formatDateForEmail = (isoString) => {
   });
 };
 
-const buildAlertEmailHtml = (redWells, now) => {
+const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false } = {}) => {
   const rows = redWells
     .map(
       (w) => `
@@ -181,7 +214,7 @@ const buildAlertEmailHtml = (redWells, now) => {
   return `
     <div style="font-family:Arial,sans-serif;color:#111;">
       <h2 style="color:#b91c1c;">Alerta - Pozos sin comunicación hace más de 6 horas</h2>
-      <p>Se detectaron <strong>${redWells.length}</strong> pozo(s) con comunicación crítica al
+      <p>${diario ? 'Desde el chequeo anterior, ' : ''}<strong>${redWells.length}</strong> pozo(s) ${diario ? 'pasaron a' : 'están en'} estado crítico al
       ${formatDateForEmail(now.toISOString())}.</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px;">
         <thead>
@@ -195,18 +228,42 @@ const buildAlertEmailHtml = (redWells, now) => {
         </thead>
         <tbody>${rows}</tbody>
       </table>
+      ${conocidos.length > 0 ? `
+      <p style="margin-top:16px;">Siguen sin comunicación desde antes (ya avisados):</p>
+      <ul style="font-size:14px;">${conocidos
+        .map((w) => `<li>${escapeHtml(w.name)} (${escapeHtml(w.code)}), última comunicación: ${formatDateForEmail(w.lastCommunication)}</li>`)
+        .join('')}</ul>` : ''}
       <p style="margin-top:16px;font-size:12px;color:#555;">
-        Este correo se envía automáticamente cada 6 horas sólo si existe al menos un pozo en estado crítico.
+        ${diario
+          ? 'Este correo se envía una vez al día y solo cuando algún pozo pasó a estado crítico desde el chequeo anterior.'
+          : 'Este correo se envió a pedido y lista todos los pozos en estado crítico.'}
       </p>
     </div>`;
 };
 
-// Lógica reutilizable por el cron y por el endpoint HTTP
-const runAlertCheck = async () => {
+// Lógica reutilizable por el cron y por el endpoint HTTP.
+//
+// El cron la llama con `soloNuevos: true`: escribe solo si algún pozo pasó a
+// rojo desde el chequeo anterior. El endpoint manual (`POST
+// /monitoring/send-alert-email`, solo admin) la llama sin opciones y conserva
+// el comportamiento de siempre: lista todos los pozos en rojo.
+const runAlertCheck = async ({ soloNuevos = false } = {}) => {
   const { red, now } = await computeStatus();
 
   if (red.length === 0) {
     return { sent: false, criticalCount: 0, message: 'No hay pozos en estado crítico.' };
+  }
+
+  const nuevos = soloNuevos ? red.filter((pozo) => esRojoNuevo(pozo, now)) : red;
+  const conocidos = soloNuevos ? red.filter((pozo) => !esRojoNuevo(pozo, now)) : [];
+
+  if (nuevos.length === 0) {
+    return {
+      sent: false,
+      criticalCount: red.length,
+      newCount: 0,
+      message: 'Ningún pozo pasó a estado crítico desde el chequeo anterior.',
+    };
   }
 
   const transporter = nodemailer.createTransport({
@@ -219,11 +276,13 @@ const runAlertCheck = async () => {
   await transporter.sendMail({
     from: `"Promedición" <${process.env.EMAIL_USER}>`,
     to: recipient,
-    subject: `[Promedición] ${red.length} pozo(s) sin comunicación hace más de 6 horas`,
-    html: buildAlertEmailHtml(red, now),
+    subject: soloNuevos
+      ? `[Promedición] ${nuevos.length} pozo(s) nuevo(s) sin comunicación hace más de 6 horas`
+      : `[Promedición] ${red.length} pozo(s) sin comunicación hace más de 6 horas`,
+    html: buildAlertEmailHtml(nuevos, now, { conocidos, diario: soloNuevos }),
   });
 
-  return { sent: true, criticalCount: red.length };
+  return { sent: true, criticalCount: red.length, newCount: nuevos.length };
 };
 
 const sendAlertEmail = async (req, res) => {
@@ -243,5 +302,13 @@ module.exports = {
   getWellsStatus,
   sendAlertEmail,
   runAlertCheck,
-  _internal: { parseReportDate, buildStatus, GREEN_THRESHOLD_MINUTES, RED_THRESHOLD_MINUTES },
+  _internal: {
+    parseReportDate,
+    buildStatus,
+    esRojoNuevo,
+    GREEN_THRESHOLD_MINUTES,
+    RED_THRESHOLD_MINUTES,
+    ALERT_WINDOW_MINUTES,
+    ALERT_MARGIN_MINUTES,
+  },
 };

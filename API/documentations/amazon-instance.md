@@ -280,7 +280,11 @@ Antes de reactivarlo hay que tener presente que la tarea se detiene ante el prim
 
 ## Alertas de monitoreo
 
-La API ejecuta un job interno que revisa qué pozos activos llevan más de 6 horas sin reportar y envía un correo con la lista. La frecuencia se configura con `ALERT_CRON_SCHEDULE` y `CRON_TIMEZONE` en `API/.env`. Como el job vive dentro del proceso de la API, si la API se cae las alertas también dejan de llegar.
+La API ejecuta un job interno una vez al día, a las 08:00 de `CRON_TIMEZONE`, que revisa qué pozos activos llevan más de 6 horas sin reportar. Solo envía el correo si algún pozo pasó a ese estado desde el chequeo anterior. Los pozos que ya estaban caídos, por ejemplo por una falla de hardware conocida, aparecen al final del correo como recordatorio, pero no lo disparan por sí solos.
+
+La hora se configura con `ALERT_CRON_SCHEDULE` en `API/.env` (por defecto, `0 8 * * *`). La lógica de "pasó a rojo desde el chequeo anterior" asume un chequeo cada 24 horas: con una programación más frecuente, un mismo pozo se repetiría en cada chequeo durante ese día. Para ver todos los pozos caídos en cualquier momento, un admin puede llamar a `POST /monitoring/send-alert-email`, que envía la lista completa.
+
+Como el job vive dentro del proceso de la API, si la API se cae las alertas también dejan de llegar.
 
 ## Problemas conocidos
 
