@@ -148,6 +148,14 @@ const otroEnviadoEnLaMismaHora = async (wellData) => {
  */
 const processAndPostData = async (wellData, well) => {
   try {
+    // Un reporte que ya está enviado no se vuelve a transmitir, aunque alguien
+    // lo reenvíe por la API: la DGA advierte que retransmitir puede bloquear al
+    // centro de control.
+    if (wellData.sent === true) {
+      console.log(`[dga] reporte ${wellData.id} | ya estaba enviado; no se reenvía`);
+      return true;
+    }
+
     const enviadoAntes = await otroEnviadoEnLaMismaHora(wellData);
     if (enviadoAntes) {
       console.log(

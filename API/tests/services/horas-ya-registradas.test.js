@@ -112,9 +112,10 @@ describe('processAndPostData cuando la hora no está enviada', () => {
     expect(reporte.update).toHaveBeenCalledWith(expect.objectContaining({ sent: true }));
   });
 
-  it('envía el segundo reporte si el primero de la hora no quedó enviado', async () => {
-    // La búsqueda exige `sent: true`, así que un primer reporte fallido no
-    // cuenta y el segundo completa la hora.
+  it('busca solo reportes enviados, para que un primer reporte fallido no tape la hora', async () => {
+    // Si la búsqueda no exigiera `sent: true`, el primer reporte de la hora,
+    // aunque hubiera fallado, impediría enviar el segundo y la hora quedaría
+    // sin medición en la DGA.
     findOne.mockResolvedValue(null);
     const reporte = hacerReporte();
 
@@ -144,6 +145,31 @@ describe('processAndPostData cuando la hora no está enviada', () => {
 
     await expect(processAndPostData(reporte, POZO)).rejects.toThrow();
 
+    expect(reporte.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('processAndPostData con un reporte que ya está enviado', () => {
+  it('no lo vuelve a transmitir si alguien lo reenvía', async () => {
+    const reporte = hacerReporte({ sent: true });
+
+    await expect(processAndPostData(reporte, POZO)).resolves.toBe(true);
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(findOne).not.toHaveBeenCalled();
+    expect(reporte.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('processAndPostData si falla la consulta de la hora', () => {
+  it('no envía el reporte y propaga el error, para reintentarlo después', async () => {
+    // Falla cerrado: ante la duda, no se retransmite.
+    findOne.mockRejectedValue(new Error('connection terminated'));
+    const reporte = hacerReporte();
+
+    await expect(processAndPostData(reporte, POZO)).rejects.toThrow('connection terminated');
+
+    expect(mockPost).not.toHaveBeenCalled();
     expect(reporte.update).not.toHaveBeenCalled();
   });
 });
