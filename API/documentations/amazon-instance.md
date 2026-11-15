@@ -87,7 +87,7 @@ sudo docker exec -it -e PGOPTIONS="-c default_transaction_read_only=on -c statem
   wellproject-db-1 psql -U <DB_USERNAME> -d db-well
 ```
 
-La tabla `"wellData"` crece con cada reporte y no tiene índices por `code` ni por `createdAt`, de modo que las consultas sobre ella recorren la tabla completa. Por eso deben ir siempre filtradas por fecha y nunca hacer `SELECT *` sin límite. Algunas consultas útiles son las siguientes:
+La tabla `"wellData"` crece con cada reporte y no tiene índices por `code` ni por `createdAt`, de modo que las consultas sobre ella recorren la tabla completa. Filtrar por fecha no evita ese recorrido, pero sí reduce lo que la consulta agrupa y devuelve, que es lo que consume memoria. Por eso deben ir siempre filtradas por fecha y nunca hacer `SELECT *` sin límite. Algunas consultas útiles son las siguientes:
 
 ```sql
 -- Migraciones aplicadas
@@ -110,7 +110,7 @@ Al leer el último resultado hay que considerar que los pozos pueden enviar más
 
 ## Desplegar la API
 
-Como el código de la API se monta como volumen y corre con nodemon, actualizar los archivos en disco ya es un despliegue: nodemon detecta el cambio y reinicia el proceso en pocos segundos. Durante ese reinicio la API no responde, y un reporte que llegue en ese momento se pierde o queda a medio enviar. Antes de desplegar, conviene revisar en los logs en qué minutos reportan los pozos y elegir un momento lejano a ellos. Lo mismo vale para cualquier `restart` o `up` del contenedor `api`.
+Como el código de la API se monta como volumen y corre con nodemon, actualizar los archivos en disco ya es un despliegue: nodemon detecta el cambio y reinicia el proceso en pocos segundos. Durante ese reinicio la API no responde, y un reporte que llegue en ese momento puede perderse, si el dispositivo no reintenta, o quedar a medio enviar. Antes de desplegar, conviene revisar en los logs en qué minutos reportan los pozos y elegir un momento lejano a ellos. Lo mismo vale para cualquier `restart` o `up` del contenedor `api`.
 
 La instancia no tiene una llave registrada en GitHub, por lo que `git pull origin master` falla con un error de permisos. Como el repositorio es público, los cambios se bajan por HTTPS sin credenciales y sin modificar el remoto configurado. El procedimiento es el siguiente:
 
@@ -137,15 +137,21 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
      git diff --name-only --diff-filter=A HEAD FETCH_HEAD | while read f; do [ -e "$f" ] && echo "choca: $f"; done
      ```
 
-   - **Un cambio que toca `SENDER/wellproject/config/schedule.rb`.** Si `git diff --stat HEAD FETCH_HEAD` lo incluye, el merge del paso 6 va a abortar por el cambio local de ese archivo. No se debe resolver con `git checkout` ni descartando el cambio, porque es lo único que mantiene programado el cron del SENDER. Lo correcto es guardarlo, aplicar el despliegue y reponerlo:
+   - **Un cambio que toca `SENDER/wellproject/config/schedule.rb`.** Si `git diff --stat HEAD FETCH_HEAD` lo incluye, el merge del paso 6 va a abortar por el cambio local de ese archivo. No se debe resolver con `git checkout` ni descartando el cambio, porque es lo único que mantiene programado el cron del SENDER. Lo correcto es guardarlo antes del paso 6:
 
      ```sh
      cp SENDER/wellproject/config/schedule.rb ~/schedule.rb.local-$(date +%F)
      git stash push -- SENDER/wellproject/config/schedule.rb
-     # paso 6
-     git stash pop
-     git diff SENDER/wellproject/config/schedule.rb   # el job debe seguir descomentado
      ```
+
+     Y reponerlo después del paso 6, comprobando que el job siga descomentado:
+
+     ```sh
+     git stash pop
+     git diff SENDER/wellproject/config/schedule.rb
+     ```
+
+     Si `git stash pop` informa un conflicto, el archivo queda con marcadores y el stash se conserva. En ese caso hay que copiar de vuelta el respaldo de `~/schedule.rb.local-<fecha>`, revisar que conviva con lo que trajo el despliegue y, cuando el archivo esté correcto, descartar el stash con `git stash drop`.
 
 4. Revisar si el cambio trae migraciones nuevas o cambios de dependencias:
 
@@ -156,13 +162,13 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
 5. **Solo si hay migraciones:** respaldar la base ahora, antes de aplicar el código. Si el respaldo falla, no se sigue:
 
    ```sh
-   umask 077
-   sudo docker exec wellproject-db-1 pg_dump -U <DB_USERNAME> -d db-well -Fc > ~/respaldo-$(date +%F).dump \
-     && sudo docker exec -i wellproject-db-1 pg_restore -l < ~/respaldo-$(date +%F).dump > /dev/null \
-     && echo "respaldo OK"
+   ( umask 077
+     sudo docker exec wellproject-db-1 pg_dump -U <DB_USERNAME> -d db-well -Fc > ~/respaldo-$(date +%F).dump \
+       && sudo docker exec -i wellproject-db-1 pg_restore -l < ~/respaldo-$(date +%F).dump > /dev/null \
+       && echo "respaldo OK" )
    ```
 
-   El respaldo contiene las credenciales DGA de los pozos en texto plano. Por eso se crea con `umask 077` y se borra cuando ya no sea necesario.
+   El respaldo contiene las credenciales DGA de los pozos en texto plano. Por eso se crea con permisos solo para el dueño y se borra cuando ya no sea necesario. El `umask` va entre paréntesis para que no afecte a los archivos que Git escribe en el paso siguiente.
 
 6. Aplicar el cambio. `--ff-only` evita que Git cree un merge si la instancia divergió de `master`:
 
@@ -197,7 +203,12 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
 
 Para volver atrás se mueve el repositorio al commit anotado en `~/deploys.log`. Antes hay que deshacer lo que el despliegue haya hecho fuera del código, en este orden:
 
-1. Si se aplicaron migraciones, revertirlas mientras los archivos de migración todavía existen, con `sudo docker exec api npx sequelize-cli@6.6.5 db:migrate:undo` (una vez por migración aplicada). Si algo sale mal, la base se restaura desde el respaldo del paso 5 con `pg_restore`.
+1. Si se aplicaron migraciones, revertirlas mientras los archivos de migración todavía existen, con `sudo docker exec api npx sequelize-cli@6.6.5 db:migrate:undo` (una vez por migración aplicada). Si eso falla, la base se restaura desde el respaldo del paso 5. Restaurar sobre la base en uso exige detener antes la API (`sudo docker-compose stop api`) y reemplaza todos los datos, incluidos los reportes recibidos después del respaldo:
+
+   ```sh
+   sudo docker exec -i wellproject-db-1 pg_restore -U <DB_USERNAME> -d db-well --clean --if-exists < ~/respaldo-<fecha>.dump
+   sudo docker-compose start api
+   ```
 2. Mover el código. `--keep` conserva los cambios locales que no forman parte del despliegue y aborta si alguno chocaría:
 
    ```sh
@@ -220,7 +231,7 @@ Para `~/WellProject/.env`, en cambio, `restart` no sirve: docker-compose lee ese
 sudo docker-compose up -d --no-deps api
 ```
 
-En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres, y el `stop_grace_period` de 3 segundos del compose puede forzar su cierre, lo que obliga a una recuperación al arrancar. Además recrea el contenedor `sender`, con lo que se pierde su cron.
+En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres, y el `stop_grace_period` de 3 segundos del compose puede forzar su cierre, lo que obliga a una recuperación al arrancar. Además elimina el contenedor `sender`, que el `up` siguiente crea de nuevo sin crontab ni demonio `cron`.
 
 ## SENDER y su cron
 
@@ -262,4 +273,4 @@ Los siguientes puntos están registrados como issues o pendientes y explican com
 
 - Si el proceso de Node muere por un error, nodemon no lo vuelve a levantar, y el contenedor sigue figurando como `Up` (issue #71).
 - Los logs de Docker no tienen rotación y crecen sin límite. Conviene revisar su tamaño con `sudo du -sh /var/lib/docker/containers`.
-- `docker-compose up -d --build -V` deja un volumen anónimo huérfano en cada ejecución. Se pueden listar con `sudo docker volume ls -f dangling=true`.
+- `docker-compose up -d --build -V` deja un volumen anónimo huérfano en cada ejecución. Se pueden listar con `sudo docker volume ls -f dangling=true`. No se debe usar `docker volume prune` si el contenedor de la base no existe, por ejemplo después de un `down`, porque en ese momento ningún contenedor referencia su volumen y según la versión de Docker podría borrarse junto con los datos.

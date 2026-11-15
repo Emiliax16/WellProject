@@ -807,7 +807,7 @@ function errorHandler(err, req, res, next) {
 3. Enviar a DGA
 4. Actualizar estado de reportes
 
-**Programación**: Configurado con `whenever` gem, pero en el `schedule.rb` versionado todos los bloques `every` están comentados. En producción, el job diario existe solo por un cambio local sin commitear que lo descomenta. Además, el crontab y el demonio `cron` se instalan e inician a mano dentro del contenedor y se pierden al recrearlo o reiniciarlo, la hora es UTC, cada ejecución procesa como máximo una página de 100 reportes y aborta ante el primer rechazo de la DGA. Detalle en `API/documentations/amazon-instance.md`.
+**Programación**: Configurado con `whenever` gem, pero en el `schedule.rb` versionado todos los bloques `every` están comentados. En producción, el job diario existe solo por un cambio local sin commitear que lo descomenta. Además, el crontab y el demonio `cron` se instalan e inician a mano dentro del contenedor: el crontab se pierde al recrearlo y el demonio también al reiniciarlo. La hora es UTC, cada ejecución procesa como máximo una página de 100 reportes y aborta ante el primer rechazo de la DGA. Detalle en `API/documentations/amazon-instance.md`.
 
 **Documentación**: Ver `SENDER/README.md` y `API/documentations/amazon-instance.md`
 
@@ -1007,7 +1007,7 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 
 **Faker**: `@faker-js/faker` para generar datos de prueba
 
-**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`.
+**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR que cambia `API/`. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`.
 
 ## Deployment
 
