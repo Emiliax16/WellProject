@@ -795,7 +795,7 @@ function errorHandler(err, req, res, next) {
 
 **Credenciales DGA**: son propias de cada pozo y se guardan en `wells.rutEmpresa`, `wells.rutUsuario` y `wells.password`. El MOP las entrega una sola vez y no se pueden rotar, por lo que no deben aparecer en respuestas HTTP ni en logs. Las variables `DGA_*` de las plantillas antiguas no se usan.
 
-**Rechazo por duplicado**: los pozos pueden enviar más de un reporte por hora y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Como la hora sí quedó registrada en la DGA, `processAndPostData` trata ese rechazo como envío exitoso y marca el reporte con `sent = true`. Los reportes rechazados así antes de este cambio siguen con `sent = false`.
+**Rechazo por duplicado**: los pozos pueden enviar más de un reporte por hora y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Como la hora sí quedó registrada en la DGA, `processAndPostData` trata ese rechazo como envío exitoso y marca el reporte con `sent = true`. Los reportes rechazados así antes del PR #97 (noviembre de 2026) siguen con `sent = false`.
 
 ### Servicio SENDER (Ruby on Rails)
 

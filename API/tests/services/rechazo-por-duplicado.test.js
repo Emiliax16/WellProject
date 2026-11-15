@@ -128,6 +128,28 @@ describe('processAndPostData frente a las respuestas de la DGA', () => {
     expect(reporte.update).not.toHaveBeenCalled();
   });
 
+  it('rechaza un 400 que solo contiene la frase de duplicado en medio de otro texto', async () => {
+    mockPost.mockRejectedValue(rechazoHttp(400, {
+      ...RECHAZO_DUPLICADO,
+      message: `Error de validación: ${RECHAZO_DUPLICADO.message}`,
+    }));
+    const reporte = hacerReporte();
+
+    await expect(processAndPostData(reporte, POZO)).rejects.toThrow();
+    expect(reporte.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un 400 cuya frase sigue con otra palabra después de "obra"', async () => {
+    mockPost.mockRejectedValue(rechazoHttp(400, {
+      ...RECHAZO_DUPLICADO,
+      message: 'Ya existe un registro en esa fecha, hora para la obras del titular',
+    }));
+    const reporte = hacerReporte();
+
+    await expect(processAndPostData(reporte, POZO)).rejects.toThrow();
+    expect(reporte.update).not.toHaveBeenCalled();
+  });
+
   it('rechaza el mensaje de duplicado si llega con un status distinto de 400', async () => {
     mockPost.mockRejectedValue(rechazoHttp(500, RECHAZO_DUPLICADO));
     const reporte = hacerReporte();
