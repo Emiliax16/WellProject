@@ -11,9 +11,17 @@
 
 const CLAVE = 'a'.repeat(16) + 'clave-interna-de-prueba-0123456789';
 
-jest.mock('../../models', () => ({
-  company: {}, distributor: {}, client: {}, well: {}, wellData: {}, user: {}, person: {},
-}));
+// El middleware de sesión revalida al usuario en la base: cada rol tiene un id
+// fijo y el usuario mockeado devuelve ese mismo rol.
+jest.mock('../../models', () => {
+  const rolPorId = { 1: 'admin', 2: 'company', 3: 'distributor', 4: 'normal' };
+  return {
+    company: {}, distributor: {}, client: {}, well: {}, wellData: {}, person: {},
+    user: {
+      findByPk: async (id) => ({ id, isActived: true, getRole: async () => ({ type: rolPorId[id] }) }),
+    },
+  };
+});
 jest.mock('../../src/services/activityLog.service', () => ({
   createActivityLog: jest.fn(),
 }));
@@ -171,7 +179,8 @@ describe('GET /well', () => {
 
   const conToken = async (type) => {
     const next = jest.fn();
-    const token = jwt.sign({ id: 1, type }, process.env.JWT_SECRET);
+    const id = { admin: 1, company: 2, distributor: 3, normal: 4 }[type];
+    const token = jwt.sign({ id, type }, process.env.JWT_SECRET);
     await authDeGetWell({ headers: { authorization: `Bearer ${token}` }, body: {} }, {}, next);
     return next.mock.calls[0][0];
   };

@@ -449,7 +449,7 @@ role (1) ──────< user (N)
 
 **GET** `/users/role/:id`
 - **Descripción**: Obtener rol de un usuario
-- **Auth**: Requerido (All roles)
+- **Auth**: Requerido (All roles). Cada usuario solo puede consultar su propio rol; un admin, el de cualquiera
 - **Response**: Role object
 
 **GET** `/users/roles`
@@ -664,8 +664,9 @@ function generateToken(user) {
 **Verificación** (Middleware `auth.middleware.js`):
 1. Extrae token de header `Authorization: Bearer <token>`
 2. Decodifica y verifica con `jwt.verify(token, JWT_SECRET)`
-3. Verifica que el rol del usuario esté en los roles permitidos
-4. Adjunta `req.user = decoded` para uso en controladores
+3. Revalida al usuario en la base: que exista, que tenga rol y que esté activo (un admin inactivo puede pasar, igual que en el login). Así, borrar, desactivar o cambiar de rol a un usuario tiene efecto inmediato, sin esperar a que venza el token de 24 h
+4. Verifica que el rol **actual** (el de la base, no el del token) esté en los roles permitidos
+5. Adjunta `req.user` con el `id` y el `type` vigentes para uso en controladores
 
 ### Roles Permitidos (`src/utils/allowed-roles.util.js`)
 

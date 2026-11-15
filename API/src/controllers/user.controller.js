@@ -510,6 +510,12 @@ const loginUser = async (req, res, next) => {
 const getUserRoleById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    // Cada usuario solo puede consultar su propio rol, salvo un admin. Antes
+    // cualquier sesión podía recorrer ids y saber cuáles son de admin. El
+    // portal solo consulta el rol del usuario conectado.
+    if (req.user.type !== "admin" && String(req.user.id) !== String(id)) {
+      throw new ErrorHandler(unauthorized);
+    }
     const user = await User.findByPk(id);
 
     if (!user) {
