@@ -219,7 +219,9 @@ describe('GET /companies (getAllCompanies)', () => {
   it('entrega todas las empresas a un admin', async () => {
     await listar(ADMIN);
 
-    expect(filtroUsado()).toEqual({});
+    // Lo que importa es que no haya restricción, no la forma del argumento:
+    // omitir `where` y pasar `{}` traen lo mismo.
+    expect(filtroUsado() ?? {}).toEqual({});
   });
 
   it('entrega a una distribuidora solo sus empresas', async () => {
@@ -446,7 +448,9 @@ describe('GET /clients (getAllClients)', () => {
   it('entrega todos los clientes a un admin', async () => {
     await listar(ADMIN);
 
-    expect(filtroUsado()).toEqual({});
+    // Lo que importa es que no haya restricción, no la forma del argumento:
+    // omitir `where` y pasar `{}` traen lo mismo.
+    expect(filtroUsado() ?? {}).toEqual({});
   });
 
   it('entrega a una empresa solo sus clientes', async () => {
