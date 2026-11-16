@@ -43,6 +43,13 @@ app.use(monitoringRoute);
 // Ruta formulario de contacto
 app.use(contactRoute);
 
+// Cualquier ruta no registrada responde JSON, igual que el resto de la API, en
+// vez del HTML por defecto de Express. Va después de todas las rutas y antes
+// del middleware de errores.
+app.use((req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada.' });
+});
+
 // Middleware de manejo de errores
 app.use(errorHandler);
 

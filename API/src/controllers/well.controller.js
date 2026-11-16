@@ -1,7 +1,7 @@
 //well.controller.js
 const checkPermissionsForClientResources = require('../utils/check-permissions');
 const ErrorHandler = require('../utils/error.util');
-const { unauthorized, clientNotFound } = require('../utils/errorcodes.util');
+const { unauthorized, clientNotFound, invalidClientId } = require('../utils/errorcodes.util');
 const soloCampos = require('../utils/only-fields.util');
 const { respuestaDePozo, CAMPOS_PUBLICOS_WELL } = require('../utils/well-response.util');
 const activityLogService = require('../services/activityLog.service');
@@ -54,7 +54,18 @@ const createWell = async (req, res, next) => {
     // cualquier usuario autenticado podía crear un pozo sobre la cuenta de otro
     // —y fijarle `editStatusDate`—, que es la misma vía que cierra el #81 en
     // `/clients/:id/wells/create`, por otra puerta.
-    const client = await Client.findByPk(req.body.clientId);
+    //
+    // `findByPk` lanza un Error plano si recibe un array, un objeto o un
+    // booleano, y eso terminaba en un 500 (#89). Se exige un entero positivo
+    // antes de consultar: como número, o como texto de solo dígitos (no se
+    // aceptan "12abc", "0x10" ni "1e3").
+    const { clientId } = req.body;
+    const valor = typeof clientId === 'string' && /^\s*\d+\s*$/.test(clientId) ? Number(clientId) : clientId;
+    const esEntero = typeof valor === 'number' && Number.isSafeInteger(valor) && valor > 0;
+    if (!esEntero) {
+      throw new ErrorHandler(invalidClientId);
+    }
+    const client = await Client.findByPk(valor);
     if (!client) {
       throw new ErrorHandler(clientNotFound);
     }

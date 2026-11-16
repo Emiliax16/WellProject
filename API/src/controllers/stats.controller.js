@@ -121,7 +121,6 @@ const getGlobalStats = async (req, res) => {
     console.error("Error fetching global stats:", error);
     return res.status(500).json({
       message: "Error al obtener estadísticas globales",
-      error: error.message,
     });
   }
 };
