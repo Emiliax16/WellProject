@@ -50,6 +50,11 @@ describe('POST /well con un clientId inválido (#89)', () => {
     ['texto vacío', ''],
     ['un decimal', 1.5],
     ['ausente', undefined],
+    ['hexadecimal', '0x10'],
+    ['notación científica', '1e3'],
+    ['negativo', -1],
+    ['cero', 0],
+    ['mayor que el máximo seguro', 2 ** 53],
   ])('responde 400 sin consultar la base si clientId es %s', async (_caso, clientId) => {
     const error = await crear(clientId);
 
@@ -58,7 +63,7 @@ describe('POST /well con un clientId inválido (#89)', () => {
     expect(mockClientFindByPk).not.toHaveBeenCalled();
   });
 
-  it.each([[3], ['3']])('busca el cliente si clientId es un entero (%p)', async (clientId) => {
+  it.each([[3], ['3'], [' 3 ']])('busca el cliente si clientId es un entero (%p)', async (clientId) => {
     mockClientFindByPk.mockResolvedValue(null);
 
     const error = await crear(clientId);
@@ -76,11 +81,11 @@ describe('logs de depuración (#72)', () => {
     expect(console.log).not.toHaveBeenCalled();
   });
 
-  it('registra un token inválido en una línea, sin el stack', () => {
+  it('registra un token inválido en una línea con su motivo, sin el stack', () => {
     const { decodeToken } = require('../../src/utils/auth.util');
 
     expect(decodeToken('no-es-un-token')).toBeNull();
-    expect(console.warn).toHaveBeenCalledWith('[auth] token rechazado: JsonWebTokenError');
+    expect(console.warn).toHaveBeenCalledWith('[auth] token rechazado: JsonWebTokenError: jwt malformed');
     expect(console.error).not.toHaveBeenCalled();
   });
 
@@ -115,6 +120,27 @@ describe('errores internos sin detalle en la respuesta (#72)', () => {
   });
 });
 
+describe('estadísticas globales sin detalle del error (#72)', () => {
+  it('no devuelve el mensaje del error', async () => {
+    jest.resetModules();
+    jest.doMock('../../models', () => ({
+      user: { count: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432')) },
+      client: { count: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED')) },
+      company: { count: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED')) },
+      well: { count: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED')) },
+      wellData: {}, distributor: {}, person: {}, role: {},
+    }));
+    const { getGlobalStats } = require('../../src/controllers/stats.controller');
+    const res = hacerRes();
+
+    await getGlobalStats({}, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.cuerpo).toEqual({ message: 'Error al obtener estadísticas globales' });
+    jest.dontMock('../../models');
+  });
+});
+
 describe('rutas inexistentes (#72)', () => {
   it('responden 404 en JSON y no el HTML de Express', async () => {
     const app = require('../../src/app');
@@ -128,7 +154,27 @@ describe('rutas inexistentes (#72)', () => {
       expect(respuesta.headers.get('content-type')).toMatch(/application\/json/);
       expect(JSON.parse(texto)).toEqual({ error: 'Ruta no encontrada.' });
     } finally {
-      servidor.close();
+      await new Promise((cerrar) => servidor.close(cerrar));
+    }
+  });
+});
+
+describe('body que no es JSON válido', () => {
+  it('responde 400 y no 500', async () => {
+    const app = require('../../src/app');
+    const servidor = app.listen(0);
+    try {
+      const { port } = servidor.address();
+      const respuesta = await fetch(`http://127.0.0.1:${port}/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{"email": "a@b.cl", ',
+      });
+
+      expect(respuesta.status).toBe(400);
+      expect(await respuesta.json()).toEqual({ error: 'El cuerpo de la petición no es JSON válido.' });
+    } finally {
+      await new Promise((cerrar) => servidor.close(cerrar));
     }
   });
 });

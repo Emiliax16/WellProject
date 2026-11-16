@@ -35,6 +35,12 @@ const errorHandler = (err, req, res, next) => {
     at: new Date().toISOString(),
   }));
 
+  // Un body que no es JSON válido es un error de quien llama, no del servidor.
+  // body-parser lo marca con este `type` y antes terminaba en un 500.
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'El cuerpo de la petición no es JSON válido.' });
+  }
+
   if (err instanceof ValidationError) {
     const messages = err.errors.map((error) => error.message);
     return res.status(400).json({ errors: messages });

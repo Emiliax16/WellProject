@@ -20,8 +20,10 @@ function decodeToken(token) {
     return jwt.verify(token, JWT_SECRET);
   } catch (error) {
     // Un token vencido o inválido es algo normal, no un error del servidor: se
-    // registra en una línea, sin el stack, para no llenar el log.
-    console.warn(`[auth] token rechazado: ${error.name}`);
+    // registra en una sola línea, sin el stack. El mensaje distingue causas que
+    // conviene separar (token vencido, firma inválida, secreto ausente) y no
+    // incluye el token.
+    console.warn(`[auth] token rechazado: ${error.name}: ${error.message}`);
     return null;
   }
 }

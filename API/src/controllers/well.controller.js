@@ -56,15 +56,16 @@ const createWell = async (req, res, next) => {
     // `/clients/:id/wells/create`, por otra puerta.
     //
     // `findByPk` lanza un Error plano si recibe un array, un objeto o un
-    // booleano, y eso terminaba en un 500 (#89). Se exige un entero antes de
-    // consultar, con `Number` y no `parseInt`, para no aceptar "12abc".
+    // booleano, y eso terminaba en un 500 (#89). Se exige un entero positivo
+    // antes de consultar: como número, o como texto de solo dígitos (no se
+    // aceptan "12abc", "0x10" ni "1e3").
     const { clientId } = req.body;
-    const esEntero = (typeof clientId === 'number' || (typeof clientId === 'string' && clientId.trim() !== ''))
-      && Number.isInteger(Number(clientId));
+    const valor = typeof clientId === 'string' && /^\s*\d+\s*$/.test(clientId) ? Number(clientId) : clientId;
+    const esEntero = typeof valor === 'number' && Number.isSafeInteger(valor) && valor > 0;
     if (!esEntero) {
       throw new ErrorHandler(invalidClientId);
     }
-    const client = await Client.findByPk(Number(clientId));
+    const client = await Client.findByPk(valor);
     if (!client) {
       throw new ErrorHandler(clientNotFound);
     }
