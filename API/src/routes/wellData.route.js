@@ -1,12 +1,9 @@
 const express = require("express");
 
 const authMiddleware = require("../middlewares/auth.middleware");
-const internalKeyMiddleware = require("../middlewares/internal-key.middleware");
 const {
   createWellData,
   bulkCreateWellData,
-  fetchUnsentReports,
-  repostToDGA,
   repostAllReportsToDGA,
   bulkDeleteWellData,
 } = require("../controllers/wellData.controller");
@@ -19,11 +16,9 @@ const router = express.Router();
 router.post("/wellData", createWellData);
 router.post("/massImportWellData", bulkCreateWellData);
 
-// Consumidos por el servicio SENDER, que no tiene usuario: en vez del JWT exigen
-// la clave interna compartida (`X-Internal-Api-Key`). Sin ella cualquiera podía
-// leer todos los reportes pendientes o forzar reenvíos a la DGA.
-router.get("/fetchUnsentReports", internalKeyMiddleware, fetchUnsentReports);
-router.post("/repostToDGA", internalKeyMiddleware, repostToDGA);
+// `/fetchUnsentReports` y `/repostToDGA`, que consumía el SENDER, ya no
+// existen: el reintento a la DGA corre dentro de la API (`src/jobs/dga-retry.js`)
+// y no necesita rutas expuestas.
 
 // Acciones disparadas desde el portal: requieren sesión
 router.post("/repostAllReportsToDGA", authMiddleware(...AdminAndCompanyAndNormal), repostAllReportsToDGA);

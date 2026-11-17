@@ -68,23 +68,5 @@ services:
     # Postgres necesita más de 3 s para cerrar limpio. Con el margen común, cada
     # `stop` terminaba en SIGKILL y obligaba a una recuperación al arrancar.
     stop_grace_period: 60s
-  sender:
-    build:
-      context: ./SENDER/wellproject
-      dockerfile: Dockerfile
-    container_name: sender
-    env_file:
-      - ./SENDER/wellproject/.env
-    volumes:
-      - ./SENDER/wellproject:/rails
-    depends_on:
-      - api
-      - db
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
 volumes:
   postgres_data:   # Define el volumen para almacenar datos

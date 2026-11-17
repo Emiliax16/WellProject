@@ -91,10 +91,10 @@ Estos endpoints quedan abiertos:
 Los dos primeros deberían pasar a validar un secreto o a restringirse por IP.
 Eso requiere coordinar el cambio con Layrz (issue #62).
 
-**Rutas del SENDER.** `GET /fetchUnsentReports` y `POST /repostToDGA` no usan
-JWT porque el SENDER no tiene usuario, pero exigen la clave interna compartida
-en el header `X-Internal-Api-Key`, igual a `INTERNAL_API_KEY`. Si la variable no
-está configurada con al menos 32 caracteres, se rechaza toda llamada.
+**Rutas del SENDER, eliminadas.** `GET /fetchUnsentReports` y `POST
+/repostToDGA` existían para el SENDER y se protegían con una clave interna. Se
+eliminaron en noviembre de 2026, cuando el reintento a la DGA pasó a la API, y
+hoy responden 404.
 
 **`GET /well`.** Exige sesión de admin. Antes era anónimo y entregaba el código
 de todos los pozos. Se cerró después de revisar los logs de producción: ni el

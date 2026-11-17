@@ -1,5 +1,5 @@
 # Proyecto de Administración de Pozos y Reportes para la DGA
-Este proyecto está diseñado para administrar la información de pozos de agua, permitiendo la generación y envío de reportes a la Dirección General de Aguas (DGA) de Chile en el formato requerido. El proyecto consta de dos servicios principales que se comunican y trabajan en conjunto.
+Este proyecto está diseñado para administrar la información de pozos de agua, permitiendo la generación y envío de reportes a la Dirección General de Aguas (DGA) de Chile en el formato requerido. El proyecto es una API en Node.js que también reintenta cada día los envíos fallidos a la DGA.
 
 ## Servicios del Proyecto
 1. API (Backend en `Express.js`)
@@ -9,21 +9,15 @@ Tecnologías utilizadas:
 * Express.js
 * PostgreSQL (Base de datos)
 * Docker (Para la configuración del entorno)
-2. SENDER (Servicio de Envío en Ruby on Rails)
-Descripción: Servicio que reenviaba a la DGA los reportes que no se enviaron al momento de recibirse. Quedó reemplazado por el reintento diario de la API (`API/src/jobs/dga-retry.js`) y su cron debe seguir apagado hasta que se elimine. Ver [SENDER](SENDER/README.md).
-Tecnologías utilizadas:
-* Ruby on Rails
-* Whenever (para la programación de cron jobs)
-* Docker (Para la configuración del entorno)
-## Requisitos
-1. Docker y Docker Compose (para levantar los servicios de manera simultánea)
-2. Javascript y Express (para el desarrollo del servicio API)
-3. Ruby y Rails (para el desarrollo del servicio SENDER)
 
-Cada servicio consta de una documentación completa:
-* [API](API/README.md)
-* [SENDER](SENDER/README.md)
+Hasta noviembre de 2026 existía además el SENDER, un servicio en Ruby on Rails que reintentaba los envíos a la DGA. Se eliminó al pasar ese reintento a la API (`API/src/jobs/dga-retry.js`); su código queda en el historial de git.
+
+## Requisitos
+1. Docker y Docker Compose (para levantar la API y la base de datos)
+2. Javascript y Express (para el desarrollo de la API)
+
+La documentación completa de la API está en [API](API/README.md).
 
 ## Producción
 
-La API, la base de datos y el SENDER corren en una instancia EC2 que se actualiza a mano. Cómo revisarla, desplegar, volver atrás y consultar la base sin riesgo está documentado en [Operación de la instancia de producción](API/documentations/amazon-instance.md).
+La API y la base de datos corren en una instancia EC2 que se actualiza a mano. Cómo revisarla, desplegar, volver atrás y consultar la base sin riesgo está documentado en [Operación de la instancia de producción](API/documentations/amazon-instance.md).

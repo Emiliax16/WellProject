@@ -2,7 +2,7 @@ name: CI
 
 # El proyecto se despliega a mano y no tiene ninguna otra automatización: esta
 # es la única barrera entre un PR y `master`. Corre sólo cuando cambia la API,
-# para no gastar minutos en cambios de documentación o del SENDER.
+# para no gastar minutos en cambios de documentación.
 on:
   pull_request:
     paths:
