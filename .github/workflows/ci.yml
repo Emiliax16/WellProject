@@ -43,10 +43,58 @@ jobs:
       - run: npm ci
 
       # `npm test` excluye `tests/models` a propósito: esos tests hacen
-      # `sequelize.sync({ force: true })` y borran la base. En CI no hay ninguna
+      # `sequelize.sync({ force: true })` y borran la base. En este job no hay ninguna
       # base levantada, así que además fallarían.
       #
       # El resto no necesita ni Postgres ni secretos: mockean los modelos, y
       # `server.test.js` bloquea axios antes de cargar nada para que ningún
       # camino pueda transmitir a la DGA desde el runner.
       - run: npm test
+
+  migraciones:
+    name: Migraciones contra Postgres
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: API
+
+    # Las migraciones solo se pueden probar contra una base real. Este Postgres
+    # vive lo que dura el job y es la misma versión que corre en producción
+    # (`postgres:14.11-alpine3.19` en docker-compose.yml). La clave es la de un
+    # contenedor desechable, no un secreto.
+    services:
+      postgres:
+        image: postgres:14.11-alpine3.19
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wellproject_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # `config/config.js` arma el nombre de la base de pruebas como
+    # `${DB_NAME}_test`, y `safe-database.js` exige ese sufijo antes de borrar.
+    env:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: wellproject_ci
+      DB_HOST: localhost
+      DB_PORT: 5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '21'
+          cache: npm
+          cache-dependency-path: API/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run test:migrations
