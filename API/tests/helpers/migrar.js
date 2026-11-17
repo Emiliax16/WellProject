@@ -18,20 +18,25 @@ const migraciones = () => fs.readdirSync(DIRECTORIO).filter((f) => f.endsWith('.
 
 const cargar = (archivo) => require(path.join(DIRECTORIO, archivo));
 
+const migrar = async (debeCorrer) => {
+  assertSafeToWipe();
+  await sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+
+  const queryInterface = sequelize.getQueryInterface();
+  for (const archivo of migraciones().filter(debeCorrer)) {
+    await cargar(archivo).up(queryInterface, Sequelize);
+  }
+};
+
 // Deja la base con todas las migraciones anteriores a `hasta`, sin incluirla.
 const migrarHastaAntesDe = async (hasta) => {
   if (!migraciones().includes(hasta)) {
     throw new Error(`No existe la migración ${hasta}`);
   }
-
-  assertSafeToWipe();
-  await sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-
-  const queryInterface = sequelize.getQueryInterface();
-  for (const archivo of migraciones()) {
-    if (archivo >= hasta) break;
-    await cargar(archivo).up(queryInterface, Sequelize);
-  }
+  await migrar((archivo) => archivo < hasta);
 };
 
-module.exports = { migrarHastaAntesDe, cargar };
+// Deja la base como la de producción, con todas las migraciones.
+const migrarTodo = () => migrar(() => true);
+
+module.exports = { migrarHastaAntesDe, migrarTodo, cargar };

@@ -8,9 +8,9 @@ const { respuestaDePozo, conClaveDgaOculta, MASCARA_CLAVE_DGA } = require('../ut
 // Lo único que se puede escribir en un pozo desde el portal.
 //
 // Fuera quedan `clientId`, que decidiría a qué cuenta pertenece el pozo, y
-// `editStatusDate`, que fija el controlador al activar o desactivar y que
-// `fetchUnsentReports` usa para decidir qué reportes reintentar: escribirla a
-// futuro deja los envíos fallidos de ese pozo sin reintentar jamás.
+// `editStatusDate`, que fija el modelo cada vez que cambia `isActived` (#69) y
+// que el reintento a la DGA usa para decidir qué reportes reintentar: escribirla
+// a futuro deja los envíos fallidos de ese pozo sin reintentar jamás.
 //
 // Las credenciales DGA sí entran: el formulario del pozo las edita
 // (`wellForm.js` registra `rutEmpresa`, `rutUsuario` y `password`), y quien

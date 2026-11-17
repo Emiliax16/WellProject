@@ -51,14 +51,15 @@ jobs:
       # camino pueda transmitir a la DGA desde el runner.
       - run: npm test
 
-  migraciones:
-    name: Migraciones contra Postgres
+  base-de-datos:
+    name: Tests con Postgres
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: API
 
-    # Las migraciones solo se pueden probar contra una base real. Este Postgres
+    # Las migraciones y las consultas SQL propias (como la selección del
+    # reintento a la DGA) solo se pueden probar contra una base real. Este Postgres
     # vive lo que dura el job y es la misma versión que corre en producción
     # (`postgres:14.11-alpine3.19` en docker-compose.yml). La clave es la de un
     # contenedor desechable, no un secreto.
@@ -97,4 +98,4 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run test:migrations
+      - run: npm run test:db

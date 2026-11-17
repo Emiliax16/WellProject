@@ -51,6 +51,20 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
     },
   }, {
+    hooks: {
+      // `editStatusDate` marca desde cuándo el pozo está activo o inactivo, y el
+      // reintento a la DGA solo toma los reportes creados después de esa fecha:
+      // los de un período inactivo no se envían. Antes solo la fijaba el botón
+      // de activar, así que crear un pozo activo o cambiarlo desde el formulario
+      // de edición la dejaba vacía o vieja (#69). Desde el hook vale para
+      // cualquier camino que guarde el pozo.
+      beforeSave: (pozo) => {
+        const cambioDeEstado = pozo.isNewRecord ? pozo.isActived === true : pozo.changed('isActived');
+        if (cambioDeEstado) {
+          pozo.editStatusDate = new Date();
+        }
+      },
+    },
     sequelize,
     modelName: 'well',
   });
