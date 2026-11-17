@@ -97,4 +97,14 @@ describe('resumen de mediciones que la DGA no aceptó', () => {
 
     expect(await resumenSinAceptar({ ahora: AHORA })).toEqual([]);
   });
+
+  test('contar como de ayer la primera hora del sábado el domingo del cambio de horario de septiembre', async () => {
+    // El 06-09-2026 Chile adelanta la hora a medianoche: las 00:00 de ese día
+    // no existen. Un error de cálculo hacía empezar "ayer" a la 01:00 del 05-09.
+    await insertarReporte('OB-0902-639', '2026-09-05T04:30:00Z', '05/09/2026', '00:30');
+
+    expect(await resumenSinAceptar({ ahora: new Date('2026-09-06T12:00:00Z') })).toMatchObject([
+      { code: 'OB-0902-639', deAyer: 1, total: 1 },
+    ]);
+  });
 });

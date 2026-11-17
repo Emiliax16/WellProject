@@ -30,6 +30,7 @@
 
 const { wellData: WellData } = require('../../models');
 const processAndPostData = require('../services/wellData/handleSendData.service');
+const { iniciarCorrida, terminarCorrida } = require('./estado-reintento');
 const {
   buscarPendientes: buscarEnLaBase,
   DIAS_DE_VENTANA,
@@ -75,14 +76,18 @@ const reintentarPendientes = async ({
     return { omitida: true };
   }
   enCurso = true;
+  let error = null;
 
   try {
+    // Si la búsqueda falla, la corrida queda registrada como terminada con
+    // error, para que la alerta de las 08:00 lo informe.
+    iniciarCorrida({ inicio: ahora, pendientes: 0, alcanzoElMaximo: false });
     const ids = await buscarPendientes({ ahora, maximo });
     console.log(
       `[reintento-dga] ${ids.length} medición(es) pendiente(s) de los últimos ${DIAS_DE_VENTANA} días`
     );
 
-    const resultado = { pendientes: ids.length, aceptados: 0, fallidos: 0, omitidos: 0 };
+    const estado = iniciarCorrida({ inicio: ahora, pendientes: ids.length, alcanzoElMaximo: ids.length >= maximo });
     let transmitioAntes = false;
 
     for (const id of ids) {
@@ -98,27 +103,33 @@ const reintentarPendientes = async ({
           ({ reporte, pozo } = await leerEnviable(id));
         }
         if (!reporte) {
-          resultado.omitidos += 1;
+          estado.omitidos += 1;
           continue;
         }
         transmitioAntes = true;
 
         await processAndPostData(reporte, pozo);
-        resultado.aceptados += 1;
+        estado.aceptados += 1;
       } catch (error) {
         // Puede ser un rechazo de la DGA, un timeout o un error propio, como
         // la base caída: en ningún caso se corta la corrida. Solo se registra
         // el mensaje, porque un error de axios completo podría arrastrar el
         // cuerpo enviado, que lleva las credenciales DGA del pozo.
-        resultado.fallidos += 1;
+        estado.fallidos += 1;
         const detalle = reporte ? ` (${reporte.code} ${reporte.date} ${reporte.hour})` : '';
         console.error(`[reintento-dga] falló el reintento del reporte ${id}${detalle}: ${error.message}`);
       }
     }
 
+    const { pendientes, aceptados, fallidos, omitidos } = estado;
+    const resultado = { pendientes, aceptados, fallidos, omitidos };
     console.log('[reintento-dga] resultado:', resultado);
     return resultado;
+  } catch (e) {
+    error = e.message;
+    throw e;
   } finally {
+    terminarCorrida({ error });
     enCurso = false;
   }
 };

@@ -2,6 +2,8 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 const db = require('../../models');
 const { resumenSinAceptar, DIAS_DE_VENTANA } = require('../services/wellData/pendientesDga.service');
+const { leerUltimaCorrida } = require('../jobs/estado-reintento');
+const moment = require('moment-timezone');
 
 const escapeHtml = (s) => {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -245,7 +247,31 @@ const seccionSinComunicacion = (redWells, now, { conocidos = [], diario = false 
 // Pozos que sí reportan, pero con mediciones que la DGA no aceptó (#70). Sin
 // esta sección, un pozo cuyos envíos fallan aparecía en verde: los datos
 // llegaban al portal y nadie se enteraba de que a la DGA no llegaba nada.
-const seccionSinEntrega = (pozos) => {
+// Qué pasó con el reintento de hoy, para no afirmar que una medición falló en
+// él si la corrida no existió, sigue en curso o llegó al máximo de envíos.
+const estadoDelReintento = (now) => {
+  const corrida = leerUltimaCorrida();
+  const inicioDeHoy = moment(now).tz('America/Santiago').startOf('day').toDate();
+  if (!corrida || corrida.inicio < inicioDeHoy) {
+    return 'No hay registro del reintento de hoy: no corrió o la API se reinició después. Las mediciones de ayer podrían no haberse reintentado todavía.';
+  }
+  if (corrida.error) {
+    return `El reintento de hoy falló antes de terminar: ${escapeHtml(corrida.error)}.`;
+  }
+  const hechas = corrida.aceptados + corrida.fallidos + corrida.omitidos;
+  if (!corrida.terminada) {
+    return `El reintento de hoy sigue en curso: lleva ${hechas} de ${corrida.pendientes} mediciones.`;
+  }
+  const maximo = corrida.alcanzoElMaximo ? ' Llegó al máximo de envíos por corrida, así que el resto queda para mañana.' : '';
+  return `El reintento de hoy terminó: ${corrida.aceptados} aceptadas, ${corrida.fallidos} fallidas y ${corrida.omitidos} omitidas de ${corrida.pendientes}.${maximo}`;
+};
+
+const seccionSinEntrega = (pozos, now, errorDeConsulta) => {
+  if (errorDeConsulta) {
+    return `
+      <h2 style="color:#b45309;margin-top:24px;">Mediciones que no llegaron a la DGA</h2>
+      <p>No se pudo revisar la entrega a la DGA en este chequeo. El detalle está en el log de la API.</p>`;
+  }
   const rows = pozos
     .map(
       (p) => `
@@ -261,7 +287,7 @@ const seccionSinEntrega = (pozos) => {
 
   return `
       <h2 style="color:#b45309;margin-top:24px;">Mediciones que no llegaron a la DGA</h2>
-      <p>Estos pozos reportan, pero la DGA no aceptó algunas de sus mediciones, ni al recibirlas ni en el reintento de las 03:00. El reintento las vuelve a enviar cada día, hasta ${DIAS_DE_VENTANA} días hacia atrás. El motivo de cada rechazo queda en el log de la API, en las líneas <code>[reintento-dga]</code>.</p>
+      <p>La DGA no aceptó estas mediciones, que a la hora de este correo siguen pendientes. ${estadoDelReintento(now)} El reintento las vuelve a enviar cada día, hasta ${DIAS_DE_VENTANA} días hacia atrás. Una fila con 0 horas de ayer solo tiene pendientes de días anteriores. El motivo de cada rechazo queda en el log de la API, en las líneas <code>[reintento-dga]</code>.</p>
       <table style="border-collapse:collapse;width:100%;font-size:14px;">
         <thead>
           <tr style="background:#fef3c7;">
@@ -277,10 +303,10 @@ const seccionSinEntrega = (pozos) => {
       <p style="font-size:13px;">Según el documento de transmisión de la DGA (§6.3), si una medición no se logra transmitir dentro del plazo de desfase de la resolución DGA N° 1238/2019, se considera falla de transmisión y el titular debe informarla con un ticket.</p>`;
 };
 
-const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false, sinEntrega = [] } = {}) => `
+const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false, sinEntrega = [], errorDeEntrega = null } = {}) => `
     <div style="font-family:Arial,sans-serif;color:#111;">
       ${redWells.length > 0 ? seccionSinComunicacion(redWells, now, { conocidos, diario }) : ''}
-      ${sinEntrega.length > 0 ? seccionSinEntrega(sinEntrega) : ''}
+      ${sinEntrega.length > 0 || errorDeEntrega ? seccionSinEntrega(sinEntrega, now, errorDeEntrega) : ''}
       <p style="margin-top:16px;font-size:12px;color:#555;">
         ${diario
           ? 'Este correo se envía una vez al día y solo cuando algún pozo pasó a estado crítico en las últimas 24 horas o alguna medición de ayer no llegó a la DGA.'
@@ -305,7 +331,18 @@ const runAlertCheck = async ({ soloNuevos = false } = {}) => {
   // de ayer sigue sin aceptarse después del reintento de las 03:00; las más
   // antiguas aparecen como recordatorio, pero no disparan el correo por sí
   // solas, igual que los pozos que ya estaban caídos.
-  const sinEntrega = soloNuevos ? await resumenSinAceptar({ ahora: now }) : [];
+  // Si la consulta falla, la alerta de pozos en rojo sale igual, con un aviso
+  // de que no se pudo revisar la entrega.
+  let sinEntrega = [];
+  let errorDeEntrega = null;
+  if (soloNuevos) {
+    try {
+      sinEntrega = await resumenSinAceptar({ ahora: now });
+    } catch (error) {
+      errorDeEntrega = error.message;
+      console.error('[alerta] no se pudo revisar la entrega a la DGA:', error.message);
+    }
+  }
   const horasDeAyer = sinEntrega.reduce((suma, pozo) => suma + pozo.deAyer, 0);
   const entrega = { undeliveredWells: sinEntrega.length, undeliveredYesterday: horasDeAyer };
 
@@ -344,13 +381,9 @@ const runAlertCheck = async ({ soloNuevos = false } = {}) => {
     from: `"Promedición" <${process.env.EMAIL_USER}>`,
     to: recipient,
     subject,
-    // Los pozos que ya estaban caídos solo se recuerdan cuando hay alguno
-    // nuevo, como antes: si el correo sale solo por la entrega, no se agregan.
-    html: buildAlertEmailHtml(nuevos, now, {
-      conocidos: nuevos.length > 0 ? conocidos : [],
-      diario: soloNuevos,
-      sinEntrega,
-    }),
+    // Los pozos que ya estaban caídos se dibujan dentro de la sección de pozos
+    // en rojo, que solo aparece si hay alguno nuevo, como antes.
+    html: buildAlertEmailHtml(nuevos, now, { conocidos, diario: soloNuevos, sinEntrega, errorDeEntrega }),
   });
 
   return {

@@ -19,6 +19,7 @@ const { sequelize, wellData: WellData } = require('../../models');
 const processAndPostData = require('../../src/services/wellData/handleSendData.service');
 const { migrarTodo } = require('../helpers/migrar');
 const { reintentarPendientes, SEPARACION_MS } = require('../../src/jobs/dga-retry');
+const { leerUltimaCorrida, _internal: estadoInterno } = require('../../src/jobs/estado-reintento');
 
 jest.setTimeout(60000);
 
@@ -82,6 +83,7 @@ describe('reintento diario a la DGA', () => {
         VALUES (1, 'Cliente', 'cliente@example.com', 'x', 2, true, now(), now());
       INSERT INTO clients (id, "userId", "createdAt", "updatedAt") VALUES (1, 1, now(), now());`);
     siguienteId = 1;
+    estadoInterno.reiniciar();
     mockPost.mockReset();
     mockPost.mockResolvedValue(ACEPTADO);
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -143,14 +145,15 @@ describe('reintento diario a la DGA', () => {
       expect(await enviados()).toContain(otroDia);
     });
 
-    test('enviar del más antiguo al más nuevo', async () => {
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 5, hour: '23:01' });
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
+    test('enviar primero las fallas de ayer y después las más antiguas, cada grupo por antigüedad', async () => {
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 5, date: '16/11/2026', hour: '22:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 24 * 5, date: '12/11/2026', hour: '03:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, date: '16/11/2026', hour: '07:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, date: '15/11/2026', hour: '21:01' });
 
       await correr();
 
-      expect(transmitidos().map((t) => t.hora)).toEqual(['00:01:00', '18:01:00', '23:01:00']);
+      expect(transmitidos().map((t) => t.hora)).toEqual(['07:01:00', '22:01:00', '03:01:00', '21:01:00']);
     });
 
     test('esperar 5 minutos entre envíos, y no antes del primero', async () => {
@@ -195,7 +198,7 @@ describe('reintento diario a la DGA', () => {
     });
 
     test('seguir con los demás cuando la DGA rechaza uno', async () => {
-      const rechazado = await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
+      const rechazado = await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
       const aceptado = await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
       mockPost.mockRejectedValueOnce(rechazo(401, 'Credenciales inválidas'));
 
@@ -204,12 +207,12 @@ describe('reintento diario a la DGA', () => {
       expect(await enviados()).toEqual([aceptado]);
       expect(resultado).toEqual({ pendientes: 2, aceptados: 1, fallidos: 1, omitidos: 0 });
       expect(console.error).toHaveBeenCalledWith(
-        `[reintento-dga] falló el reintento del reporte ${rechazado} (OB-0902-639 16/11/2026 00:01): No se pudo enviar los datos a la DGA. Por favor revisa bien los parámetros que estás enviando`
+        `[reintento-dga] falló el reintento del reporte ${rechazado} (OB-0902-639 16/11/2026 07:01): No se pudo enviar los datos a la DGA. Por favor revisa bien los parámetros que estás enviando`
       );
     });
 
     test('seguir con los demás si falla la lectura de un reporte en la base', async () => {
-      const primero = await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
+      const primero = await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
       const segundo = await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
       jest.spyOn(WellData, 'findByPk').mockRejectedValueOnce(new Error('Connection terminated unexpectedly'));
 
@@ -244,25 +247,25 @@ describe('reintento diario a la DGA', () => {
       expect(await enviados()).toEqual([id]);
     });
 
-    test('respetar el máximo de envíos por corrida y dejar el resto para el día siguiente', async () => {
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 5, hour: '23:01' });
+    test('respetar el máximo de envíos por corrida, sin dejar fuera las fallas de ayer por las antiguas', async () => {
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 24 * 5, date: '12/11/2026', hour: '03:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 24 * 4, date: '13/11/2026', hour: '03:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, date: '16/11/2026', hour: '17:01' });
 
       const resultado = await correr({ maximo: 2 });
 
-      expect(transmitidos().map((t) => t.hora)).toEqual(['00:01:00', '18:01:00']);
+      expect(transmitidos().map((t) => t.hora)).toEqual(['17:01:00', '03:01:00']);
       expect(resultado.pendientes).toBe(2);
     });
 
     test('omitir un reporte que se envió mientras la corrida esperaba su turno', async () => {
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
       const segundo = await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
       const esperar = jest.fn(() => sequelize.query(`UPDATE "wellData" SET sent = true WHERE id = ${segundo}`));
 
       const resultado = await correr({ esperar });
 
-      expect(transmitidos().map((t) => t.hora)).toEqual(['00:01:00']);
+      expect(transmitidos().map((t) => t.hora)).toEqual(['07:01:00']);
       expect(resultado).toMatchObject({ aceptados: 1, omitidos: 1 });
     });
 
@@ -320,7 +323,7 @@ describe('reintento diario a la DGA', () => {
     test('omitir un pozo que se desactivó mientras la corrida esperaba su turno', async () => {
       await insertarPozo('OB-0902-639');
       await insertarPozo('OB-0701-1496');
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
       await insertarReporte('OB-0701-1496', { creadoHaceHoras: 10, hour: '18:01' });
       const esperar = jest.fn(() =>
         sequelize.query(`UPDATE wells SET "isActived" = false WHERE code = 'OB-0701-1496'`)
@@ -330,6 +333,64 @@ describe('reintento diario a la DGA', () => {
 
       expect(transmitidos().map((t) => t.obra)).toEqual(['OB-0902-639']);
       expect(resultado).toMatchObject({ aceptados: 1, omitidos: 1 });
+    });
+  });
+
+  describe('estado de la corrida, que lee la alerta de las 08:00', () => {
+    beforeEach(async () => {
+      await insertarPozo('OB-0902-639');
+    });
+
+    test('registrar la corrida terminada con sus resultados', async () => {
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '17:01' });
+      mockPost.mockRejectedValueOnce(rechazo(401, 'Credenciales inválidas'));
+
+      await correr();
+
+      expect(leerUltimaCorrida()).toEqual({
+        inicio: AHORA,
+        terminada: true,
+        pendientes: 2,
+        alcanzoElMaximo: false,
+        aceptados: 1,
+        fallidos: 1,
+        omitidos: 0,
+        error: null,
+      });
+    });
+
+    test('marcar que la corrida llegó al máximo de envíos', async () => {
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '17:01' });
+
+      await correr({ maximo: 2 });
+
+      expect(leerUltimaCorrida()).toMatchObject({ terminada: true, alcanzoElMaximo: true });
+    });
+
+    test('mostrar la corrida en curso con lo que lleva', async () => {
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '07:01' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '17:01' });
+      let enLaEspera;
+      const esperar = jest.fn(() => {
+        enLaEspera = leerUltimaCorrida();
+      });
+
+      await correr({ esperar });
+
+      expect(enLaEspera).toMatchObject({ terminada: false, pendientes: 2, aceptados: 1 });
+    });
+
+    test('registrar el error si la búsqueda de pendientes falla', async () => {
+      await sequelize.query('DROP TABLE "wellData" CASCADE');
+
+      // Se compara solo la forma del error: su texto lo traduce Postgres según
+      // `lc_messages`.
+      const error = await correr().catch((e) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(leerUltimaCorrida()).toMatchObject({ terminada: true, error: error.message });
     });
   });
 });

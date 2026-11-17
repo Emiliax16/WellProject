@@ -39,7 +39,11 @@ const ventana = (ahora) => {
     // `createdAt < hasta`, para que un reporte creado justo a medianoche cuente
     // como del día de la consulta.
     hasta: new Date(Math.min(conGracia, inicioDeHoy.valueOf())),
-    inicioDeAyer: inicioDeHoy.clone().subtract(1, 'day').toDate(),
+    // Se resta el día antes de ir a la medianoche, y no al revés: el día del
+    // cambio de horario de septiembre la medianoche no existe, y moment la
+    // representa a la 01:00, así que restarle un día dejaba fuera la primera
+    // hora del día anterior.
+    inicioDeAyer: moment(ahora).tz(ZONA).subtract(1, 'day').startOf('day').toDate(),
   };
 };
 
@@ -71,14 +75,19 @@ const MEDICIONES_PENDIENTES = `
      ORDER BY c.code, c.date, c.hora, c."createdAt", c.id
   )`;
 
-// Ids a reintentar, del más antiguo al más nuevo. Solo trae ids, para que la
-// consulta no cargue filas completas en memoria.
+// Ids a reintentar. Van primero las mediciones de ayer, para que cada falla
+// nueva tenga su reintento "el día siguiente" (§6.2) aunque haya muchas
+// pendientes antiguas, por ejemplo de un pozo con credenciales vencidas; y
+// después las más antiguas. Dentro de cada grupo, por antigüedad. Solo trae
+// ids, para que la consulta no cargue filas completas en memoria.
 const buscarPendientes = async ({ ahora = new Date(), maximo }) => {
-  const { desde, hasta } = ventana(ahora);
+  const { desde, hasta, inicioDeAyer } = ventana(ahora);
   const [filas] = await sequelize.query(
     `${MEDICIONES_PENDIENTES}
-     SELECT id FROM pendientes ORDER BY "createdAt", id LIMIT :maximo`,
-    { replacements: { desde, hasta, maximo } }
+     SELECT id FROM pendientes
+      ORDER BY ("createdAt" >= :inicioDeAyer) DESC, "createdAt", id
+      LIMIT :maximo`,
+    { replacements: { desde, hasta, inicioDeAyer, maximo } }
   );
   return filas.map((fila) => fila.id);
 };

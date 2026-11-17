@@ -319,6 +319,20 @@ describe('runAlertCheck con mediciones que no llegaron a la DGA', () => {
   });
 });
 
+describe('runAlertCheck si falla la revisión de la entrega', () => {
+  it('manda igual la alerta de un pozo nuevo en rojo, avisando que no se pudo revisar la entrega', async () => {
+    configurarPozos([{ code: 'OB-0902-1553', name: 'Pozo 1', ultimoReporte: haceMinutos(10 * 60) }]);
+    mockResumenSinAceptar.mockRejectedValue(new Error('Connection terminated unexpectedly'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const resultado = await runAlertCheck({ soloNuevos: true });
+
+    expect(resultado).toMatchObject({ sent: true, newCount: 1 });
+    expect(mockSendMail.mock.calls[0][0].html).toContain('No se pudo revisar la entrega a la DGA en este chequeo.');
+    console.error.mockRestore();
+  });
+});
+
 describe('runAlertCheck en el envío manual', () => {
   it('lista todos los pozos en rojo, nuevos y antiguos, como antes', async () => {
     configurarPozos([
