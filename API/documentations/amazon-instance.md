@@ -51,7 +51,7 @@ git log -1 --format='%h %cd %s' --date=short
 git status -sb
 ```
 
-`git status` no debe mostrar cambios en archivos versionados. Los archivos sin seguimiento conocidos, como los respaldos antiguos de `API/.env`, pueden quedarse. Cualquier cambio en un archivo versionado hay que entenderlo antes de desplegar.
+`git status` no debe mostrar cambios en archivos versionados. La única excepción conocida es `SENDER/wellproject/config/schedule.rb`, mientras no se haga el retiro del SENDER (ver "Retirar el SENDER (una sola vez)"). Los archivos sin seguimiento conocidos, como los respaldos antiguos de `API/.env`, pueden quedarse. Cualquier cambio en un archivo versionado hay que entenderlo antes de desplegar.
 
 La segunda revisión muestra el estado de los contenedores y desde cuándo corren:
 
@@ -181,7 +181,7 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
 10. Verificar que la API arrancó, que está sana y que vuelve a recibir reportes:
 
     ```sh
-    sudo docker logs api --since 2m 2>&1 | grep -aE 'Escuchando|scheduler|internal-key|Error|fatal'
+    sudo docker logs api --since 2m 2>&1 | grep -aE 'Escuchando|scheduler|Error|fatal'
     sudo docker ps --filter name=api --format '{{.Names}} {{.Status}}'   # debe decir (healthy)
     ```
 
@@ -190,6 +190,8 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
 11. Registrar el commit nuevo con `echo "despues=$(git rev-parse HEAD)" >> ~/deploys.log`.
 
 ### Volver atrás
+
+Si el despliegue que se revierte es el que eliminó el SENDER, antes de cualquier comando de docker-compose hay que seguir "Si hay que volver atrás" en la sección "Retirar el SENDER (una sola vez)".
 
 Para volver atrás se mueve el repositorio al commit anotado en `~/deploys.log`. Antes hay que deshacer lo que el despliegue haya hecho fuera del código, en este orden:
 
@@ -254,52 +256,82 @@ Como el job vive dentro del proceso de la API, un reinicio a mitad de una corrid
 
 ## Retirar el SENDER (una sola vez)
 
-El SENDER era un servicio en Rails que reintentaba los envíos fallidos a la DGA llamando a `/fetchUnsentReports` y `/repostToDGA` con una clave interna. Su cron no corría desde marzo de 2025 y quedó reemplazado por el reintento diario de la API. El despliegue que lo elimina del repositorio requiere estos pasos en la instancia, **antes del merge** del paso 6 de "Desplegar la API":
+El SENDER era un servicio en Rails que reintentaba los envíos fallidos a la DGA llamando a `/fetchUnsentReports` y `/repostToDGA` con una clave interna. Su cron no corría desde marzo de 2025 y quedó reemplazado por el reintento diario de la API. El despliegue que lo elimina del repositorio requiere pasos antes y después del procedimiento de "Desplegar la API".
 
-1. Respaldar su carpeta completa, incluidos los archivos sin seguimiento y su `.env`, con permisos solo para el dueño, y comprobar que el respaldo se puede leer:
+### Antes del merge
+
+Estos pasos van después del paso 5 de "Desplegar la API" (respaldo de la base) y antes del merge del paso 6. Ninguno corta el servicio.
+
+1. Revisar cuánto pesa la carpeta y si tiene archivos de otro dueño. Si el segundo comando imprime algo, los comandos `tar` y `rm` de esta sección se ejecutan con `sudo`:
 
    ```sh
    cd ~/WellProject
-   ( umask 077 && tar czf ~/sender-respaldo-$(date +%F).tgz SENDER ) && tar tzf ~/sender-respaldo-$(date +%F).tgz | wc -l
+   du -sh SENDER
+   find SENDER ! -user "$(id -un)" | head
    ```
 
-2. Detener y eliminar el contenedor. Tiene `restart: unless-stopped`, así que sin el `rm` volvería a levantarse con el siguiente reinicio del sistema:
+2. Respaldar la carpeta completa, incluidos los archivos sin seguimiento y su `.env`, con permisos solo para el dueño, y comprobar que el respaldo se puede leer entero:
+
+   ```sh
+   ( umask 077 && tar czf ~/sender-respaldo-$(date +%F).tgz SENDER ) \
+     && tar tzf ~/sender-respaldo-$(date +%F).tgz > /dev/null && echo "respaldo OK"
+   ```
+
+3. Detener y eliminar el contenedor. Detenerlo basta para que no vuelva a levantarse; eliminarlo además libera su imagen y evita que docker-compose avise de un contenedor huérfano:
 
    ```sh
    sudo docker stop sender && sudo docker rm sender
    ```
 
-3. Descartar el cambio local de `SENDER/wellproject/config/schedule.rb`, que ya quedó en el respaldo. El despliegue borra ese archivo, y con el cambio local el merge aborta:
+4. Quitar `INTERNAL_API_KEY` de `~/WellProject/API/.env`, que ya no la usa nadie. El archivo es de `root`, así que se edita con `sudo`. El respaldo que deja `sed` tiene todos los secretos, así que se mueve fuera del repositorio con permisos 600: dentro quedaría a la vista en `git status` y se copiaría a la imagen en el próximo build. La API en curso ya cargó su entorno, así que el cambio se aplica recién con el reinicio del despliegue:
+
+   ```sh
+   sudo sed -i.bak-sender '/^[[:space:]]*INTERNAL_API_KEY[[:space:]]*=/d' ~/WellProject/API/.env
+   sudo mv ~/WellProject/API/.env.bak-sender ~/API.env.bak-sender-$(date +%F)
+   sudo chmod 600 ~/API.env.bak-sender-$(date +%F)
+   ls -la ~/WellProject/API/.env    # debe seguir siendo de root
+   ```
+
+5. Descartar el cambio local de `SENDER/wellproject/config/schedule.rb`, que ya quedó en el respaldo. El despliegue borra ese archivo, y con el cambio local el merge aborta:
 
    ```sh
    git checkout -- SENDER/wellproject/config/schedule.rb
    ```
 
-4. Seguir con el merge y el resto del despliegue. Después del merge, la carpeta `SENDER` queda solo con archivos sin seguimiento (`bundle/`, `log/`, `.env` y otros). Comprobado el respaldo del paso 1, se borra:
+Con eso se sigue con el merge y el resto de "Desplegar la API". Si el único cambio de `docker-compose.yml` es la eliminación del servicio `sender`, no hace falta reconstruir la imagen (paso 8): basta con el reinicio del paso 9. El paso 8 sigue aplicando si cambiaron las dependencias o el Dockerfile.
+
+### Después del despliegue
+
+Estos pasos van después de la verificación del paso 10.
+
+6. Borrar lo que quede de la carpeta, que después del merge tiene solo archivos sin seguimiento (`bundle/`, `log/`, `.env` y otros). El comando comprueba antes que está dentro del repositorio y que git ya no versiona nada bajo `SENDER`; si no, no borra nada:
 
    ```sh
-   git status --short SENDER | grep -v '^??' && echo "hay archivos versionados: revisar antes de borrar" || rm -rf ~/WellProject/SENDER
+   cd ~/WellProject && git rev-parse --git-dir > /dev/null && [ -z "$(git ls-files SENDER)" ] \
+     && rm -rf ~/WellProject/SENDER || echo "SENDER sigue versionado o no es el repositorio: revisar antes de borrar"
    ```
 
-5. Quitar `INTERNAL_API_KEY` de `~/WellProject/API/.env`, que ya no la usa nadie. El archivo es de `root`, así que se edita con `sudo`, dejando un respaldo:
+7. Opcionalmente, liberar los cerca de 840 MB de la imagen. Su nombre depende de la versión de docker-compose que la construyó, así que se revisa antes:
 
    ```sh
-   sudo sed -i.bak-sender '/^[[:space:]]*INTERNAL_API_KEY[[:space:]]*=/d' ~/WellProject/API/.env
-   ls -la ~/WellProject/API/.env    # debe seguir siendo de root
+   sudo docker images | grep -i sender
+   sudo docker rmi <nombre de la imagen>
    ```
 
-   El cambio se aplica con el `restart -t 15 api` del despliegue.
-
-6. Opcionalmente, liberar los cerca de 840 MB de la imagen: `sudo docker rmi wellproject-sender`.
-
-7. Verificar que el contenedor ya no existe y que las rutas del SENDER responden 404:
+8. Verificar que el contenedor ya no existe y que las rutas del SENDER responden 404:
 
    ```sh
    sudo docker ps -a --format '{{.Names}}' | grep -c sender    # debe imprimir 0
    curl -s -o /dev/null -w "%{http_code}\n" https://promedicionbackend.com/fetchUnsentReports    # 404
    ```
 
-Si hiciera falta volver atrás, el código está en el historial de git y la configuración local en el respaldo del paso 1.
+### Si hay que volver atrás
+
+El código está en el historial de git y la configuración local, en el respaldo del paso 2. El `docker-compose.yml` anterior al retiro apunta a `SENDER/wellproject/.env`, y docker-compose falla si ese archivo no existe. Por eso, después del `git reset --keep` y **antes de cualquier comando de docker-compose**, hay que restaurarlo desde el respaldo:
+
+```sh
+cd ~/WellProject && tar xzf ~/sender-respaldo-<fecha>.tgz SENDER/wellproject/.env
+```
 
 ## Alertas de monitoreo
 

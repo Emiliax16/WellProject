@@ -249,7 +249,7 @@ const repostAllReportsToDGA = async (req, res, next) => {
                                       },
                                     },
                                     // OJO: acá el pozo SÍ debe traer sus credenciales DGA, al
-                                    // revés que en fetchUnsentReports. Este `well` se pasa a
+                                    // revés que en las respuestas al portal. Este `well` se pasa a
                                     // processAndPostData, que hace parseRUT(data.rutEmpresa), y
                                     // parseRUT revienta con undefined. Excluirlas "por
                                     // consistencia" rompe el reenvío manual desde el portal.
