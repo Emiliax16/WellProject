@@ -963,11 +963,14 @@ npm start
 # Desarrollo con hot reload (nodemon)
 npm run dev
 
-# Tests (excluye los de modelos, que limpian la base)
+# Tests (excluye los de modelos y migraciones, que limpian la base)
 npm test
 
 # Tests de modelos
 npm run test:models
+
+# Tests de migraciones (reconstruye la base de pruebas con las migraciones)
+npm run test:migrations
 ```
 
 Producción corre con `node src/server.js`: si el proceso termina por un error, Docker reinicia el contenedor. nodemon queda solo para desarrollo; en docker-compose se activa con un `docker-compose.override.yml` local (ver `API/README.md`).
@@ -1012,15 +1015,16 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 ```json
 {
   "scripts": {
-    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models",
-    "test:models": "NODE_ENV=test jest tests/models"
+    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models tests/migrations",
+    "test:models": "NODE_ENV=test jest tests/models",
+    "test:migrations": "NODE_ENV=test jest --runInBand tests/migrations"
   }
 }
 ```
 
 **Faker**: `@faker-js/faker` para generar datos de prueba
 
-**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR que cambia `API/`. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`.
+**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR que cambia `API/`. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`. Los de `tests/migrations` reconstruyen la base de pruebas ejecutando todas las migraciones, para probarlas sobre el mismo esquema que producción; corren con `npm run test:migrations` y en un segundo job del CI con Postgres 14.11.
 
 ## Deployment
 

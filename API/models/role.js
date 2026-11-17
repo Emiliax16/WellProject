@@ -10,7 +10,8 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      role.hasMany(models.user, { foreignKey: 'roleId' });
+      // RESTRICT en los dos lados de la asociación: ver `models/user.js`.
+      role.hasMany(models.user, { foreignKey: 'roleId', onDelete: 'RESTRICT' });
     }
   }
   role.init({

@@ -34,11 +34,12 @@ Ese archivo no debe existir en la instancia de producción.
 ## Tests
 
 ```bash
-npm test          # la suite completa salvo tests/models
+npm test          # la suite completa salvo tests/models y tests/migrations
 npm run test:models   # sólo tests/models: BORRA la base configurada
+npm run test:migrations   # sólo tests/migrations: BORRA la base de pruebas
 ```
 
-`npm test` excluye `tests/models` a propósito. Esos tests hacen
+`npm test` excluye `tests/models` y `tests/migrations` a propósito. Los primeros hacen
 `sequelize.sync({ force: true })`, así que borran y recrean todas las tablas de
 la base que apunte el `.env` en ese momento. El resto de la suite no toca la
 base: mockea los modelos, y `server.test.js` bloquea axios antes de cargar nada
@@ -51,9 +52,23 @@ base con datos era suficiente para perderlos.
 `tests/helpers/safe-database.js` sigue siendo la última barrera de
 `test:models`, pero es una comprobación de nombre de base, no una garantía.
 
+`npm run test:migrations` prueba las migraciones contra una base real. Borra el
+esquema de la base de pruebas (`${DB_NAME}_test`) y lo reconstruye ejecutando
+todas las migraciones en orden, como `sequelize-cli db:migrate` sobre una base
+vacía, así que la base de los tests queda igual a la de producción y no a la que
+saldría de los modelos. También pasa por `safe-database.js`. Para correrlo en
+local:
+
+```bash
+createdb wellproject_dev_test
+DB_NAME=wellproject_dev DB_USERNAME=$USER DB_HOST=localhost DB_PORT=5432 npm run test:migrations
+```
+
 **El CI corre `npm test` en cada PR que toque `API/`.** Está en
 `.github/workflows/ci.yml` y no necesita ni Postgres ni secretos, justamente
-porque la suite que corre no depende de ninguno de los dos.
+porque la suite que corre no depende de ninguno de los dos. Un segundo job
+levanta un Postgres 14.11 desechable, la misma versión de producción, y corre
+`npm run test:migrations`.
 
 ## Endpoints sin autenticación
 
