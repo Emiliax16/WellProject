@@ -131,16 +131,10 @@ const tooManyLoginAttempts = {
   message: "Demasiados intentos fallidos. Intenta de nuevo en 15 minutos.",
 };
 
-const invalidInternalKey = {
-  code: 401,
-  message: "Clave interna inválida.",
-};
-
 module.exports = {
   invalidClientId,
   invalidCredentials,
   tooManyLoginAttempts,
-  invalidInternalKey,
   userNotFound,
   missingParams,
   missingToken,

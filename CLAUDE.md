@@ -4,12 +4,9 @@ Esta documentación proporciona una guía completa para trabajar con el backend 
 
 ## Resumen del Proyecto
 
-**WellProject** es un sistema backend que consta de dos servicios principales para la administración de pozos de agua en Chile y el envío automático de reportes a la DGA (Dirección General de Aguas):
+**WellProject** es el backend del sistema de administración de pozos de agua en Chile y del envío automático de reportes a la DGA (Dirección General de Aguas). Es una sola API en Node.js/Express, que también reintenta cada día los envíos fallidos a la DGA (`src/jobs/dga-retry.js`).
 
-1. **API** (Node.js/Express) - Servicio principal de lógica de negocio, CRUD y autenticación
-2. **SENDER** (Ruby on Rails) - Reenviaba a la DGA los reportes no enviados. Quedó reemplazado por el reintento diario de la API (`src/jobs/dga-retry.js`) y su cron debe seguir apagado hasta que se elimine
-
-Este documento se enfoca principalmente en el **API** (el servicio SENDER tiene su propia documentación).
+Hasta noviembre de 2026 existía además el SENDER, un servicio en Ruby on Rails que hacía ese reintento llamando a la API por HTTP. Se eliminó al pasar el reintento a la API; su código queda en el historial de git.
 
 ## Stack Tecnológico - API
 
@@ -127,8 +124,6 @@ WellProject/
 │   ├── development.Dockerfile # Dockerfile para desarrollo
 │   ├── package.json           # Dependencias y scripts
 │   └── README.md              # Documentación del API
-├── SENDER/                    # Servicio de envío a DGA (Ruby on Rails)
-│   └── wellproject/           # (Ver documentación de SENDER)
 ├── docker-compose.yml         # Orquestación de servicios
 ├── .env.sample               # Variables de entorno globales
 ├── .gitignore
@@ -612,23 +607,12 @@ role (1) ──────< user (N)
 - **Response**: Reportes creados
 - **Roles**: Público
 
-**GET** `/fetchUnsentReports`
-- **Descripción**: Obtener reportes no enviados a DGA
-- **Response**: Array de wellData con `sent: false`
-- **Auth**: Clave interna en el header `X-Internal-Api-Key`, igual a `INTERNAL_API_KEY`. La usa el SENDER.
-
-**POST** `/repostToDGA`
-- **Descripción**: Reenviar un reporte a DGA
-- **Body**: `{ id }` (id del wellData)
-- **Response**: Mensaje de confirmación. Responde error si la DGA rechaza el reporte, salvo cuando el rechazo es porque ya tiene esa hora registrada, que cuenta como enviado.
-- **Auth**: Clave interna en el header `X-Internal-Api-Key`, igual a `INTERNAL_API_KEY`. La usa el SENDER.
-
 **POST** `/repostAllReportsToDGA`
 - **Descripción**: Reenviar todos los reportes seleccionados a DGA
 - **Body**: `{ reports: [{ reportId }] }`
 - **Response**: Resultado del envío
 - **Auth**: Requerido (Admin, Company, Normal). Lo usa el portal.
-- **Nota**: Extrae IDs de reportes, los busca en DB y llama directamente al servicio de envío (`processAndPostData`), no a la ruta `/repostToDGA`
+- **Nota**: Extrae IDs de reportes, los busca en DB y llama directamente al servicio de envío (`processAndPostData`)
 
 ### Contacto
 
@@ -812,21 +796,9 @@ Qué cuenta como pendiente lo define `src/services/wellData/pendientesDga.servic
 
 Solo toma reportes de pozos activos, creados en días anteriores al de la corrida (y hace más de 2 horas, para dar tiempo al envío automático) y después de la última activación del pozo (`editStatusDate`, que el modelo `well` fija cada vez que cambia `isActived`). Un rechazo o un error no detiene la corrida: se registra y sigue con el siguiente. `processAndPostData` relee el reporte antes de decidir, para que nadie que lo tenga cargado de antes retransmita lo que otro ya envió.
 
-### Servicio SENDER (Ruby on Rails)
+### SENDER (eliminado)
 
-**Reemplazado por el reintento diario de la API.** Su cron debe seguir apagado: si los dos corrieran, una misma medición fallida se reenviaría dos veces al día.
-
-**Ubicación**: `SENDER/wellproject/`
-
-**Función**: Cron job que ejecuta periódicamente para:
-1. Consultar reportes no enviados (`/fetchUnsentReports`)
-2. Procesar y formatear datos
-3. Enviar a DGA
-4. Actualizar estado de reportes
-
-**Programación**: Configurado con `whenever` gem, pero en el `schedule.rb` versionado todos los bloques `every` están comentados. En producción, el job diario existe solo por un cambio local sin commitear que lo descomenta. Además, el crontab y el demonio `cron` se instalan e inician a mano dentro del contenedor: el crontab se pierde al recrearlo y el demonio también al reiniciarlo. La hora es UTC, cada ejecución procesa como máximo una página de 100 reportes y aborta ante el primer rechazo de la DGA. Detalle en `API/documentations/amazon-instance.md`.
-
-**Documentación**: Ver `SENDER/README.md` y `API/documentations/amazon-instance.md`
+El SENDER era un servicio en Ruby on Rails que reintentaba los envíos fallidos llamando a `/fetchUnsentReports` y `/repostToDGA` con una clave interna (`INTERNAL_API_KEY`). No corría desde marzo de 2025 y se eliminó en noviembre de 2026, junto con esas dos rutas y la clave, al pasar el reintento a la API.
 
 ## Configuración
 
@@ -859,9 +831,6 @@ ALERT_EMAIL_TO=destino@example.com
 ALERT_CRON_SCHEDULE=0 8 * * *    # una vez al día; la alerta asume chequeos cada 24 h
 DGA_RETRY_CRON_SCHEDULE=0 3 * * *    # reintento diario a la DGA
 CRON_TIMEZONE=America/Santiago
-
-# Clave compartida con el SENDER (mínimo 32 caracteres: openssl rand -hex 32)
-INTERNAL_API_KEY=
 ```
 
 En producción existen dos archivos: `~/WellProject/.env`, que docker-compose inyecta al crear el contenedor, y `~/WellProject/API/.env`, que `dotenv` lee al arrancar. Las variables repetidas en ambos toman el valor del primero, porque `dotenv` no sobrescribe las que ya existen. Un cambio en `API/.env` se aplica con `docker-compose restart api`; uno en `.env` raíz requiere recrear el contenedor con `docker-compose up -d --no-deps api`.
@@ -922,11 +891,6 @@ module.exports = {
    - Puerto: 5432
    - Volumen persistente: `postgres_data`
    - Env vars: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-
-3. **sender** (Ruby on Rails)
-   - Build: `SENDER/wellproject/Dockerfile`
-   - Depends on: `api`, `db`
-   - Cron jobs para envío a DGA (el servicio `cron` se inicia a mano, ver arriba)
 
 Los puertos 3000 y 5432 se publican en todas las interfaces del host. En producción el security group de AWS es lo único que los mantiene cerrados a internet.
 
@@ -1045,7 +1009,7 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 
 ### Entorno de Producción
 
-**Plataforma**: una instancia AWS EC2 con docker-compose (API, PostgreSQL en contenedor y SENDER) detrás de Nginx. No hay RDS ni PM2.
+**Plataforma**: una instancia AWS EC2 con docker-compose (API y PostgreSQL en contenedor) detrás de Nginx. No hay RDS ni PM2.
 
 **Despliegue**: manual. Lo mergeado en `master` no llega a producción hasta que alguien lo despliega. El procedimiento completo, con verificaciones de solo lectura, respaldo y rollback, está en `API/documentations/amazon-instance.md`. Los puntos que más suelen fallar son los siguientes:
 
@@ -1111,7 +1075,7 @@ const controllerFunction = async (req, res, next) => {
 
 Ver carpeta `documentations/`:
 
-- **amazon-instance.md**: Operación de la instancia de producción: revisiones, despliegue, rollback, base en solo lectura y cron del SENDER
+- **amazon-instance.md**: Operación de la instancia de producción: revisiones, despliegue, rollback, base en solo lectura, reintento a la DGA y alertas
 - **dev-process.md**: Proceso de desarrollo completo
 - **files-order.md**: Estructura de archivos detallada
 - **git-conventions.md**: Convenciones de Git y commits

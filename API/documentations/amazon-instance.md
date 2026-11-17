@@ -1,6 +1,6 @@
 # Operación de la instancia de producción
 
-Esta guía describe cómo está montada la instancia EC2 que corre la API, la base de datos y el SENDER, y cómo revisarla y actualizarla sin interrumpir la recepción de reportes. La instancia no se actualiza sola: cada cambio mergeado en `master` llega a producción solo cuando alguien lo despliega a mano siguiendo estos pasos.
+Esta guía describe cómo está montada la instancia EC2 que corre la API y la base de datos, y cómo revisarla y actualizarla sin interrumpir la recepción de reportes. La instancia no se actualiza sola: cada cambio mergeado en `master` llega a producción solo cuando alguien lo despliega a mano siguiendo estos pasos.
 
 Los valores sensibles (IP, ruta de la llave, contraseñas, correos) no se escriben en este repositorio, que es público. Donde aparecen `<IP_PUBLICA>`, `<ruta-a-la-llave.pem>` o `<DB_USERNAME>`, se deben reemplazar por los valores que tiene la persona responsable del proyecto.
 
@@ -13,7 +13,6 @@ La instancia tiene menos de 1 GB de RAM y un swap de 2 GB, así que cualquier co
 | Nginx | Host, puertos 80 y 443 | Termina TLS con certificados de Certbot y reenvía `promedicionbackend.com` a `localhost:3000` |
 | `api` | Contenedor Docker | Express con `node src/server.js`. El código se monta desde `~/WellProject/API` como volumen. Healthcheck en `/health` |
 | `wellproject-db-1` | Contenedor Docker | PostgreSQL 14, base `db-well`, volumen persistente |
-| `sender` | Contenedor Docker | Rails. Su cron depende de pasos manuales (ver más abajo) |
 
 El `docker-compose.yml` publica los puertos 3000 y 5432 en todas las interfaces del host, y Docker se salta las reglas de firewall del sistema operativo (ufw). Por eso el security group de AWS es la única barrera de red que los separa de internet: debe aceptar solo 22, 80 y 443, y nunca abrir 3000 ni 5432.
 
@@ -24,20 +23,7 @@ El frontend no vive en esta instancia. Se sirve desde S3 y CloudFront, y su desp
 Hay dos archivos de entorno en la instancia, ninguno versionado:
 
 1. `~/WellProject/.env`, que docker-compose inyecta en el contenedor `api` al crearlo. Contiene la conexión a la base.
-2. `~/WellProject/API/.env`, que la API lee con `dotenv` al arrancar. Contiene, entre otras, `JWT_SECRET`, las credenciales de correo, la programación de las alertas (`ALERT_CRON_SCHEDULE`, `CRON_TIMEZONE`) y `INTERNAL_API_KEY`.
-
-El contenedor `sender` tiene su propio archivo, `~/WellProject/SENDER/wellproject/.env`, con las URL de la API (`FETCH_API_REPORTS`, `POST_API_REPORTS`) y la misma `INTERNAL_API_KEY`. Esas URL deben apuntar a `api:3000`, por la red interna de Docker, y nunca al dominio público: la llamada va por `http` y la clave viajaría sin cifrar.
-
-`INTERNAL_API_KEY` es la clave que protege `/fetchUnsentReports` y `/repostToDGA`, las dos rutas que consume el SENDER. Debe tener al menos 32 caracteres, ser idéntica en los dos archivos y escribirse sin comillas. Se genera con `openssl rand -hex 32`. Si falta en la API o es más corta, la API rechaza toda llamada a esas rutas y lo avisa en el log al arrancar. Si el SENDER no la tiene o no coincide, sus llamadas reciben 401.
-
-Después de agregar o cambiar la clave, se puede comprobar desde el contenedor `sender`, que llega a la API por la red interna. La primera llamada debe responder 401 y la segunda 200. La clave se lee desde `/rails/.env`, que es el mismo archivo montado en el contenedor, porque una variable recién agregada no existe en el entorno del contenedor hasta recrearlo. Es una consulta de solo lectura, acotada por la paginación de la ruta:
-
-```sh
-sudo docker exec sender sh -c 'curl -s -o /dev/null -w "%{http_code}\n" "http://$FETCH_API_REPORTS?size=1"'
-sudo docker exec sender sh -c 'curl -s -o /dev/null -w "%{http_code}\n" \
-  -H "X-Internal-Api-Key: $(sed -nE "s/^[[:space:]]*INTERNAL_API_KEY[[:space:]]*=[[:space:]]*//p" /rails/.env)" \
-  "http://$FETCH_API_REPORTS?size=1"'
-```
+2. `~/WellProject/API/.env`, que la API lee con `dotenv` al arrancar. Contiene, entre otras, `JWT_SECRET`, las credenciales de correo, y la programación de la alerta y del reintento a la DGA (`ALERT_CRON_SCHEDULE`, `DGA_RETRY_CRON_SCHEDULE`, `CRON_TIMEZONE`).
 
 Algunas variables están repetidas en los dos archivos (las `DB_*`, `API_PORT` y `NODE_ENV`). Como `dotenv` no sobrescribe variables que ya existen, en esos casos gana el valor de `~/WellProject/.env`, y cambiarlas en `API/.env` no tiene efecto. La forma de aplicar un cambio también depende del archivo, como se explica en "Aplicar cambios de entorno".
 
@@ -65,7 +51,7 @@ git log -1 --format='%h %cd %s' --date=short
 git status -sb
 ```
 
-`git status` debe mostrar un único cambio local esperado, en `SENDER/wellproject/config/schedule.rb`, que se explica en la sección del SENDER. Cualquier otro cambio en un archivo versionado hay que entenderlo antes de desplegar.
+`git status` no debe mostrar cambios en archivos versionados. La única excepción conocida es `SENDER/wellproject/config/schedule.rb`, mientras no se haga el retiro del SENDER (ver "Retirar el SENDER (una sola vez)"). Los archivos sin seguimiento conocidos, como los respaldos antiguos de `API/.env`, pueden quedarse. Cualquier cambio en un archivo versionado hay que entenderlo antes de desplegar.
 
 La segunda revisión muestra el estado de los contenedores y desde cuándo corren:
 
@@ -142,29 +128,13 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
    git diff --stat HEAD FETCH_HEAD
    ```
 
-3. Comprobar que nada vaya a chocar con el estado local de la instancia. Hay dos casos posibles:
+3. Comprobar que ningún archivo nuevo del despliegue exista ya sin versionar en la instancia. Este comando los lista; si imprime algo, ese archivo se mueve a un respaldo fuera del repositorio antes de seguir. No se usa con `set -e`, porque el último `[ -e ]` falso cortaría el script:
 
-   - **Un archivo nuevo que ya existe sin versionar.** Este comando los lista; si imprime algo, ese archivo se mueve a un respaldo fuera del repositorio antes de seguir:
+   ```sh
+   git diff --name-only --diff-filter=A HEAD FETCH_HEAD | while read f; do if [ -e "$f" ]; then echo "choca: $f"; fi; done
+   ```
 
-     ```sh
-     git diff --name-only --diff-filter=A HEAD FETCH_HEAD | while read f; do [ -e "$f" ] && echo "choca: $f"; done
-     ```
-
-   - **Un cambio que toca `SENDER/wellproject/config/schedule.rb`.** Si `git diff --stat HEAD FETCH_HEAD` lo incluye, el merge del paso 6 va a abortar por el cambio local de ese archivo. No se debe resolver con `git checkout` ni descartando el cambio, porque es lo único que mantiene programado el cron del SENDER. Lo correcto es guardarlo antes del paso 6:
-
-     ```sh
-     cp SENDER/wellproject/config/schedule.rb ~/schedule.rb.local-$(date +%F)
-     git stash push -- SENDER/wellproject/config/schedule.rb
-     ```
-
-     Y reponerlo después del paso 6, comprobando que el job siga descomentado:
-
-     ```sh
-     git stash pop
-     git diff SENDER/wellproject/config/schedule.rb
-     ```
-
-     Si `git stash pop` informa un conflicto, el archivo queda con marcadores y el stash se conserva. En ese caso hay que copiar de vuelta el respaldo de `~/schedule.rb.local-<fecha>`, revisar que conviva con lo que trajo el despliegue y, cuando el archivo esté correcto, descartar el stash con `git stash drop`.
+   Si el despliegue es el que elimina el SENDER, antes del merge hay que seguir la sección "Retirar el SENDER (una sola vez)": la instancia tiene un cambio local en un archivo que ese despliegue borra, y sin ese paso el merge aborta.
 
 4. Revisar si el cambio trae migraciones nuevas o cambios de dependencias:
 
@@ -211,7 +181,7 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
 10. Verificar que la API arrancó, que está sana y que vuelve a recibir reportes:
 
     ```sh
-    sudo docker logs api --since 2m 2>&1 | grep -aE 'Escuchando|scheduler|internal-key|Error|fatal'
+    sudo docker logs api --since 2m 2>&1 | grep -aE 'Escuchando|scheduler|Error|fatal'
     sudo docker ps --filter name=api --format '{{.Names}} {{.Status}}'   # debe decir (healthy)
     ```
 
@@ -220,6 +190,8 @@ La instancia no tiene una llave registrada en GitHub, por lo que `git pull origi
 11. Registrar el commit nuevo con `echo "despues=$(git rev-parse HEAD)" >> ~/deploys.log`.
 
 ### Volver atrás
+
+Si el despliegue que se revierte es el que eliminó el SENDER, antes de cualquier comando de docker-compose hay que seguir "Si hay que volver atrás" en la sección "Retirar el SENDER (una sola vez)".
 
 Para volver atrás se mueve el repositorio al commit anotado en `~/deploys.log`. Antes hay que deshacer lo que el despliegue haya hecho fuera del código, en este orden:
 
@@ -251,11 +223,9 @@ Para `~/WellProject/.env`, en cambio, `restart` no sirve: docker-compose lee ese
 sudo docker-compose up -d --no-deps api
 ```
 
-`SENDER/wellproject/.env` es un caso intermedio. La tarea del cron lo lee en cada ejecución con `dotenv-rails`, porque el archivo está montado dentro del contenedor, así que una variable nueva le llega sin recrear nada. Recrear el contenedor (`sudo docker-compose up -d --no-deps sender`) solo hace falta cuando se cambia el valor de una variable que ya existía, por ejemplo al rotar `INTERNAL_API_KEY`. Al recrearlo se pierden el crontab y el demonio `cron`, que hay que reponer como se indica en la sección del SENDER.
+En ningún caso se debe usar `docker-compose down` para esto, porque detiene también Postgres.
 
-En ningún caso se debe usar `docker-compose down` para esto. Ese comando detiene también Postgres y elimina el contenedor `sender`, que el `up` siguiente crea de nuevo sin crontab ni demonio `cron`.
-
-Tampoco se debe usar `docker-compose up -d` sin nombrar el servicio y sin `--no-deps`. Si la configuración de `db` o `sender` en `docker-compose.yml` difiere de la de sus contenedores, los recrea a los tres. La base se detiene con el margen con que se creó su contenedor (3 s hasta que se aplique el cambio de noviembre de 2026), con riesgo de un cierre forzado, y `sender` pierde su cron. Siempre `up -d --no-deps <servicio>`.
+Tampoco se debe usar `docker-compose up -d` sin nombrar el servicio y sin `--no-deps`. Si la configuración de `db` en `docker-compose.yml` difiere de la de su contenedor, la recrea, y la base se detiene en medio del tráfico. Siempre `up -d --no-deps <servicio>`.
 
 ### Salud de la API
 
@@ -269,7 +239,6 @@ Hasta noviembre de 2026 la API corría con nodemon, el contenedor no tenía heal
 
 1. **`api`:** se recrea con el paso 8 del despliegue, porque el mismo cambio movió dependencias en `package.json`. Al recrearlo se elimina el log anterior, que llegó a pesar 3 GB.
 2. **`db`:** su nuevo margen de apagado (60 s) y la rotación de logs se aplican al recrearla. El contenedor actual todavía tiene el margen de 3 s, así que antes hay que detenerla a mano con un margen amplio, en un momento sin tráfico: `sudo docker stop -t 60 wellproject-db-1 && sudo docker-compose up -d --no-deps db`. Mientras tanto la API responde error.
-3. **`sender`:** toma la rotación de logs la próxima vez que se recree. Al recrearlo hay que reponer su cron.
 
 ## Reintento diario a la DGA
 
@@ -285,37 +254,84 @@ La primera dice cuántas mediciones quedaron pendientes y la última resume cuá
 
 Como el job vive dentro del proceso de la API, un reinicio a mitad de una corrida la corta. No queda nada a medias: lo que falte se toma al día siguiente. Por eso conviene no desplegar entre las 03:00 y el fin de la corrida si hay muchos pendientes. La hora se cambia con `DGA_RETRY_CRON_SCHEDULE` en `API/.env`, seguida de un `restart -t 15 api`.
 
-## SENDER y su cron
+## Retirar el SENDER (una sola vez)
 
-**El SENDER quedó reemplazado por el reintento diario de la API, y su cron tiene que seguir apagado.** Si los dos corrieran, cada medición fallida se reenviaría dos veces al día. Lo que sigue describe cómo funcionaba, hasta que el servicio se elimine.
+El SENDER era un servicio en Rails que reintentaba los envíos fallidos a la DGA llamando a `/fetchUnsentReports` y `/repostToDGA` con una clave interna. Su cron no corría desde marzo de 2025 y quedó reemplazado por el reintento diario de la API. El despliegue que lo elimina del repositorio requiere pasos antes y después del procedimiento de "Desplegar la API".
 
-El SENDER reenvía una vez al día los reportes que quedaron sin enviar. Pide a la API una página de hasta 100 pendientes (`/fetchUnsentReports`) y los reenvía uno por uno (`/repostToDGA`), con 5 minutos de espera entre cada envío. Su funcionamiento depende de tres piezas, y ninguna se recupera sola:
+### Antes del merge
 
-1. **El job.** En el `schedule.rb` versionado, todos los bloques `every` están comentados. El job diario existe solo porque la instancia tiene un cambio local que descomenta el bloque de `rake sender:fetch_unsent_and_send`. Por eso ese cambio no se debe descartar.
-2. **El crontab.** `whenever --update-crontab` lo instala dentro del contenedor a partir de ese archivo, y se pierde si el contenedor se recrea.
-3. **El demonio `cron`.** No forma parte del proceso principal de la imagen, que solo levanta Puma. Se inicia a mano y se pierde cada vez que el contenedor se reinicia o se recrea.
+Estos pasos van después del paso 5 de "Desplegar la API" (respaldo de la base) y antes del merge del paso 6. Ninguno corta el servicio.
 
-La hora del job es la del contenedor, que no define zona horaria y usa UTC. Las "6:00" del `schedule.rb` corresponden a las 03:00 o 02:00 de Chile, según el horario vigente.
+1. Revisar cuánto pesa la carpeta y si tiene archivos de otro dueño. Si el segundo comando imprime algo, los comandos `tar` y `rm` de esta sección se ejecutan con `sudo`:
 
-Para comprobar las tres piezas sin cambiar nada:
+   ```sh
+   cd ~/WellProject
+   du -sh SENDER
+   find SENDER ! -user "$(id -un)" | head
+   ```
+
+2. Respaldar la carpeta completa, incluidos los archivos sin seguimiento y su `.env`, con permisos solo para el dueño, y comprobar que el respaldo se puede leer entero:
+
+   ```sh
+   ( umask 077 && tar czf ~/sender-respaldo-$(date +%F).tgz SENDER ) \
+     && tar tzf ~/sender-respaldo-$(date +%F).tgz > /dev/null && echo "respaldo OK"
+   ```
+
+3. Detener y eliminar el contenedor. Detenerlo basta para que no vuelva a levantarse; eliminarlo además libera su imagen y evita que docker-compose avise de un contenedor huérfano:
+
+   ```sh
+   sudo docker stop sender && sudo docker rm sender
+   ```
+
+4. Quitar `INTERNAL_API_KEY` de `~/WellProject/API/.env`, que ya no la usa nadie. El archivo es de `root`, así que se edita con `sudo`. El respaldo que deja `sed` tiene todos los secretos, así que se mueve fuera del repositorio con permisos 600: dentro quedaría a la vista en `git status` y se copiaría a la imagen en el próximo build. La API en curso ya cargó su entorno, así que el cambio se aplica recién con el reinicio del despliegue:
+
+   ```sh
+   sudo sed -i.bak-sender '/^[[:space:]]*INTERNAL_API_KEY[[:space:]]*=/d' ~/WellProject/API/.env
+   sudo mv ~/WellProject/API/.env.bak-sender ~/API.env.bak-sender-$(date +%F)
+   sudo chmod 600 ~/API.env.bak-sender-$(date +%F)
+   ls -la ~/WellProject/API/.env    # debe seguir siendo de root
+   ```
+
+5. Descartar el cambio local de `SENDER/wellproject/config/schedule.rb`, que ya quedó en el respaldo. El despliegue borra ese archivo, y con el cambio local el merge aborta:
+
+   ```sh
+   git checkout -- SENDER/wellproject/config/schedule.rb
+   ```
+
+Con eso se sigue con el merge y el resto de "Desplegar la API". Si el único cambio de `docker-compose.yml` es la eliminación del servicio `sender`, no hace falta reconstruir la imagen (paso 8): basta con el reinicio del paso 9. El paso 8 sigue aplicando si cambiaron las dependencias o el Dockerfile.
+
+### Después del despliegue
+
+Estos pasos van después de la verificación del paso 10.
+
+6. Borrar lo que quede de la carpeta, que después del merge tiene solo archivos sin seguimiento (`bundle/`, `log/`, `.env` y otros). El comando comprueba antes que está dentro del repositorio y que git ya no versiona nada bajo `SENDER`; si no, no borra nada:
+
+   ```sh
+   cd ~/WellProject && git rev-parse --git-dir > /dev/null && [ -z "$(git ls-files SENDER)" ] \
+     && rm -rf ~/WellProject/SENDER || echo "SENDER sigue versionado o no es el repositorio: revisar antes de borrar"
+   ```
+
+7. Opcionalmente, liberar los cerca de 840 MB de la imagen. Su nombre depende de la versión de docker-compose que la construyó, así que se revisa antes:
+
+   ```sh
+   sudo docker images | grep -i sender
+   sudo docker rmi <nombre de la imagen>
+   ```
+
+8. Verificar que el contenedor ya no existe y que las rutas del SENDER responden 404:
+
+   ```sh
+   sudo docker ps -a --format '{{.Names}}' | grep -c sender    # debe imprimir 0
+   curl -s -o /dev/null -w "%{http_code}\n" https://promedicionbackend.com/fetchUnsentReports    # 404
+   ```
+
+### Si hay que volver atrás
+
+El código está en el historial de git y la configuración local, en el respaldo del paso 2. El `docker-compose.yml` anterior al retiro apunta a `SENDER/wellproject/.env`, y docker-compose falla si ese archivo no existe. Por eso, después del `git reset --keep` y **antes de cualquier comando de docker-compose**, hay que restaurarlo desde el respaldo:
 
 ```sh
-git -C ~/WellProject diff SENDER/wellproject/config/schedule.rb    # el job debe aparecer descomentado
-sudo docker exec sender crontab -l                                  # debe listar sender:fetch_unsent_and_send
-sudo docker exec sender sh -c 'ls /proc | grep -E "^[0-9]+$" | while read p; do cat /proc/$p/comm 2>/dev/null; done | grep -c cron'
-ls -la ~/WellProject/SENDER/wellproject/log/ | grep cron            # fecha del último registro
+cd ~/WellProject && tar xzf ~/sender-respaldo-<fecha>.tgz SENDER/wellproject/.env
 ```
-
-El tercer comando imprime `0` si el demonio no está corriendo. Para iniciarlo en producción no hay que seguir los pasos de instalación de `SENDER/README.md`, que reconstruyen imágenes y levantan todo el stack. Basta con lo siguiente:
-
-```sh
-# Solo si el crontab no aparece (el contenedor se recreó):
-sudo docker exec sender sh -c 'cd /rails && bundle exec whenever --update-crontab'
-# Iniciar el demonio:
-sudo docker exec -u root sender service cron start
-```
-
-Antes de reactivarlo hay que tener presente que la tarea se detiene ante el primer error de `/repostToDGA`. Los rechazos por duplicado ya no cuentan como error, pero cualquier otro rechazo de la DGA, como credenciales inválidas en un pozo, aborta el lote. Además, cada reporte tarda 5 minutos, y entre los pendientes de los últimos 3 días, que es lo que recibe el SENDER, puede haber muchos duplicados anteriores al cambio. Está planificado reemplazar este servicio por un cron en la API.
 
 ## Alertas de monitoreo
 
