@@ -325,6 +325,8 @@ La hora se configura con `ALERT_CRON_SCHEDULE` en `API/.env` (por defecto, `0 8 
 
 Hay dos limitaciones propias de un chequeo diario sin estado. Una caída que empieza y termina entre dos chequeos no se avisa, porque el chequeo solo ve el estado del momento. Y si la API está detenida o reiniciándose justo a las 08:00, ese día no hay chequeo y los pozos que cayeron en esas 24 horas no se avisan; conviene evitar desplegar cerca de esa hora. Para ver todos los pozos caídos en cualquier momento, un admin puede llamar a `POST /monitoring/send-alert-email`, que envía la lista completa.
 
+El mismo correo avisa de las mediciones que no llegaron a la DGA (#70). Si alguna medición de ayer sigue sin aceptarse después del envío automático y del reintento de las 03:00, el correo sale aunque ningún pozo esté en rojo, con una tabla por pozo: horas de ayer sin aceptar, total pendiente dentro de la ventana de 35 días y la medición pendiente más antigua. Las pendientes de días anteriores aparecen como recordatorio, pero no disparan el correo por sí solas. El envío manual de `POST /monitoring/send-alert-email` no revisa la entrega. Para ver el motivo de cada rechazo, hay que buscar las líneas `[reintento-dga]` del log, como se explica en la sección del reintento.
+
 Como el job vive dentro del proceso de la API, si la API se cae las alertas también dejan de llegar.
 
 ## Problemas conocidos

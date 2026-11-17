@@ -808,6 +808,8 @@ Reenvía a la DGA los reportes que no recibieron `00`. Corre dentro de la API, u
 - **§6.1:** las mediciones atrasadas se envían de a una, con 5 minutos entre cada envío. Cada corrida envía como máximo 250, y el resto queda para el día siguiente.
 - **§6.3:** no se retransmite lo que la DGA ya tiene. Se envía una sola medición por pozo, fecha y hora (la primera que llegó), y se omite toda hora que ya tenga un reporte enviado.
 
+Qué cuenta como pendiente lo define `src/services/wellData/pendientesDga.service.js`, que comparten el reintento y la alerta de las 08:00. La alerta avisa si alguna medición de ayer sigue sin aceptarse después del reintento (#70).
+
 Solo toma reportes de pozos activos, creados en días anteriores al de la corrida (y hace más de 2 horas, para dar tiempo al envío automático) y después de la última activación del pozo (`editStatusDate`, que el modelo `well` fija cada vez que cambia `isActived`). Un rechazo o un error no detiene la corrida: se registra y sigue con el siguiente. `processAndPostData` relee el reporte antes de decidir, para que nadie que lo tenga cargado de antes retransmita lo que otro ya envió.
 
 ### Servicio SENDER (Ruby on Rails)

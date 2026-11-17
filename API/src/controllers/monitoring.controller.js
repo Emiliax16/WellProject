@@ -1,6 +1,7 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const db = require('../../models');
+const { resumenSinAceptar, DIAS_DE_VENTANA } = require('../services/wellData/pendientesDga.service');
 
 const escapeHtml = (s) => {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -201,7 +202,7 @@ const formatDateForEmail = (isoString) => {
   });
 };
 
-const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false } = {}) => {
+const seccionSinComunicacion = (redWells, now, { conocidos = [], diario = false } = {}) => {
   const rows = redWells
     .map(
       (w) => `
@@ -218,7 +219,6 @@ const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false } =
     .join('');
 
   return `
-    <div style="font-family:Arial,sans-serif;color:#111;">
       <h2 style="color:#b91c1c;">Alerta - Pozos sin comunicación hace más de 6 horas</h2>
       <p>${diario
         ? `En las últimas 24 horas, <strong>${redWells.length}</strong> pozo(s) pasaron a estado crítico`
@@ -239,37 +239,85 @@ const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false } =
       <p style="margin-top:16px;">Otros pozos que siguen sin comunicación:</p>
       <ul style="font-size:14px;">${conocidos
         .map((w) => `<li>${escapeHtml(w.name)} (${escapeHtml(w.code)}), última comunicación: ${formatDateForEmail(w.lastCommunication)}</li>`)
-        .join('')}</ul>` : ''}
+        .join('')}</ul>` : ''}`;
+};
+
+// Pozos que sí reportan, pero con mediciones que la DGA no aceptó (#70). Sin
+// esta sección, un pozo cuyos envíos fallan aparecía en verde: los datos
+// llegaban al portal y nadie se enteraba de que a la DGA no llegaba nada.
+const seccionSinEntrega = (pozos) => {
+  const rows = pozos
+    .map(
+      (p) => `
+        <tr>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(p.name || p.code)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(p.code)}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${p.deAyer}</td>
+          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${p.total}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${formatDateForEmail(p.masAntigua.toISOString())}</td>
+        </tr>`
+    )
+    .join('');
+
+  return `
+      <h2 style="color:#b45309;margin-top:24px;">Mediciones que no llegaron a la DGA</h2>
+      <p>Estos pozos reportan, pero la DGA no aceptó algunas de sus mediciones, ni al recibirlas ni en el reintento de las 03:00. El reintento las vuelve a enviar cada día, hasta ${DIAS_DE_VENTANA} días hacia atrás. El motivo de cada rechazo queda en el log de la API, en las líneas <code>[reintento-dga]</code>.</p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px;">
+        <thead>
+          <tr style="background:#fef3c7;">
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Pozo</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Código</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Horas de ayer sin aceptar</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Total pendiente</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Medición pendiente más antigua</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="font-size:13px;">Según el documento de transmisión de la DGA (§6.3), si una medición no se logra transmitir dentro del plazo de desfase de la resolución DGA N° 1238/2019, se considera falla de transmisión y el titular debe informarla con un ticket.</p>`;
+};
+
+const buildAlertEmailHtml = (redWells, now, { conocidos = [], diario = false, sinEntrega = [] } = {}) => `
+    <div style="font-family:Arial,sans-serif;color:#111;">
+      ${redWells.length > 0 ? seccionSinComunicacion(redWells, now, { conocidos, diario }) : ''}
+      ${sinEntrega.length > 0 ? seccionSinEntrega(sinEntrega) : ''}
       <p style="margin-top:16px;font-size:12px;color:#555;">
         ${diario
-          ? 'Este correo se envía una vez al día y solo cuando algún pozo pasó a estado crítico en las últimas 24 horas.'
+          ? 'Este correo se envía una vez al día y solo cuando algún pozo pasó a estado crítico en las últimas 24 horas o alguna medición de ayer no llegó a la DGA.'
           : 'Este correo se envió a pedido y lista todos los pozos en estado crítico.'}
       </p>
     </div>`;
-};
 
 // Lógica reutilizable por el cron y por el endpoint HTTP.
 //
 // El cron la llama con `soloNuevos: true`: escribe solo si algún pozo pasó a
-// rojo desde el chequeo anterior. El endpoint manual (`POST
-// /monitoring/send-alert-email`, solo admin) la llama sin opciones y conserva
-// el comportamiento de siempre: lista todos los pozos en rojo.
+// rojo desde el chequeo anterior o si alguna medición de ayer no llegó a la DGA.
+// El endpoint manual (`POST /monitoring/send-alert-email`, solo admin) la llama
+// sin opciones y conserva el comportamiento de siempre: lista todos los pozos
+// en rojo, sin revisar la entrega.
 const runAlertCheck = async ({ soloNuevos = false } = {}) => {
   const { red, now } = await computeStatus();
-
-  if (red.length === 0) {
-    return { sent: false, criticalCount: 0, newCount: 0, message: 'No hay pozos en estado crítico.' };
-  }
 
   const nuevos = soloNuevos ? red.filter((pozo) => esRojoNuevo(pozo, now)) : red;
   const conocidos = soloNuevos ? red.filter((pozo) => !esRojoNuevo(pozo, now)) : [];
 
-  if (nuevos.length === 0) {
+  // Solo el chequeo diario revisa la entrega a la DGA. Avisa si alguna medición
+  // de ayer sigue sin aceptarse después del reintento de las 03:00; las más
+  // antiguas aparecen como recordatorio, pero no disparan el correo por sí
+  // solas, igual que los pozos que ya estaban caídos.
+  const sinEntrega = soloNuevos ? await resumenSinAceptar({ ahora: now }) : [];
+  const horasDeAyer = sinEntrega.reduce((suma, pozo) => suma + pozo.deAyer, 0);
+  const entrega = { undeliveredWells: sinEntrega.length, undeliveredYesterday: horasDeAyer };
+
+  if (nuevos.length === 0 && horasDeAyer === 0) {
     return {
       sent: false,
       criticalCount: red.length,
       newCount: 0,
-      message: 'Ningún pozo pasó a estado crítico desde el chequeo anterior.',
+      ...(soloNuevos ? entrega : {}),
+      message: red.length === 0
+        ? 'No hay pozos en estado crítico.'
+        : 'Ningún pozo pasó a estado crítico desde el chequeo anterior.',
     };
   }
 
@@ -280,16 +328,37 @@ const runAlertCheck = async ({ soloNuevos = false } = {}) => {
 
   const recipient = process.env.ALERT_EMAIL_TO || process.env.EMAIL_USER;
 
+  const conEntregaNueva = sinEntrega.filter((pozo) => pozo.deAyer > 0).length;
+  let subject;
+  if (!soloNuevos) {
+    subject = `[Promedición] ${red.length} pozo(s) sin comunicación hace más de 6 horas`;
+  } else if (horasDeAyer === 0) {
+    subject = `[Promedición] ${nuevos.length} pozo(s) nuevo(s) sin comunicación hace más de 6 horas`;
+  } else if (nuevos.length === 0) {
+    subject = `[Promedición] ${conEntregaNueva} pozo(s) con mediciones que no llegaron a la DGA`;
+  } else {
+    subject = `[Promedición] ${nuevos.length} pozo(s) nuevo(s) sin comunicación y ${conEntregaNueva} con mediciones que no llegaron a la DGA`;
+  }
+
   await transporter.sendMail({
     from: `"Promedición" <${process.env.EMAIL_USER}>`,
     to: recipient,
-    subject: soloNuevos
-      ? `[Promedición] ${nuevos.length} pozo(s) nuevo(s) sin comunicación hace más de 6 horas`
-      : `[Promedición] ${red.length} pozo(s) sin comunicación hace más de 6 horas`,
-    html: buildAlertEmailHtml(nuevos, now, { conocidos, diario: soloNuevos }),
+    subject,
+    // Los pozos que ya estaban caídos solo se recuerdan cuando hay alguno
+    // nuevo, como antes: si el correo sale solo por la entrega, no se agregan.
+    html: buildAlertEmailHtml(nuevos, now, {
+      conocidos: nuevos.length > 0 ? conocidos : [],
+      diario: soloNuevos,
+      sinEntrega,
+    }),
   });
 
-  return { sent: true, criticalCount: red.length, newCount: nuevos.length };
+  return {
+    sent: true,
+    criticalCount: red.length,
+    newCount: nuevos.length,
+    ...(soloNuevos ? entrega : {}),
+  };
 };
 
 const sendAlertEmail = async (req, res) => {
