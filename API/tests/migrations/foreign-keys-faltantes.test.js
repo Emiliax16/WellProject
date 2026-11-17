@@ -5,7 +5,7 @@
 // huérfana, y nada impedía guardar un `roleId` inexistente.
 //
 // Usa una base real, que reconstruye desde cero con las migraciones: corre con
-// `npm run test:migrations` y nunca contra una base que no termine en `_test`.
+// `npm run test:db` y nunca contra una base que no termine en `_test`.
 
 const { sequelize, Sequelize } = require('../../models');
 const { migrarHastaAntesDe, cargar } = require('../helpers/migrar');

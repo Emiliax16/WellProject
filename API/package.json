@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models tests/migrations",
+    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models tests/migrations tests/db",
     "test:models": "NODE_ENV=test jest tests/models",
-    "test:migrations": "NODE_ENV=test jest --runInBand tests/migrations",
+    "test:db": "NODE_ENV=test jest --runInBand tests/migrations tests/db",
     "dev": "nodemon src/server.js"
   },
   "keywords": [],

@@ -271,7 +271,23 @@ Hasta noviembre de 2026 la API corría con nodemon, el contenedor no tenía heal
 2. **`db`:** su nuevo margen de apagado (60 s) y la rotación de logs se aplican al recrearla. El contenedor actual todavía tiene el margen de 3 s, así que antes hay que detenerla a mano con un margen amplio, en un momento sin tráfico: `sudo docker stop -t 60 wellproject-db-1 && sudo docker-compose up -d --no-deps db`. Mientras tanto la API responde error.
 3. **`sender`:** toma la rotación de logs la próxima vez que se recree. Al recrearlo hay que reponer su cron.
 
+## Reintento diario a la DGA
+
+La API reenvía una vez al día, a las 03:00 de `CRON_TIMEZONE`, los reportes de días anteriores que la DGA no aceptó, hasta 35 días hacia atrás. Envía una medición por pozo y hora, con 5 minutos entre cada envío, como pide el documento de transmisión de la DGA, y como máximo 250 por corrida. El detalle de qué reportes toma está en `src/jobs/dga-retry.js`. Reemplaza al SENDER.
+
+Cada corrida deja estas líneas en el log de la API:
+
+```sh
+sudo docker logs api --since 24h 2>&1 | grep -aE '\[reintento-dga\]|reintento a la DGA'
+```
+
+La primera dice cuántas mediciones quedaron pendientes y la última resume cuántas aceptó la DGA, cuántas fallaron y cuántas se omitieron porque se enviaron o el pozo se desactivó mientras esperaban su turno. Cada falla aparece como `falló el reintento del reporte` con la obra, la fecha, la hora y el motivo, sin credenciales.
+
+Como el job vive dentro del proceso de la API, un reinicio a mitad de una corrida la corta. No queda nada a medias: lo que falte se toma al día siguiente. Por eso conviene no desplegar entre las 03:00 y el fin de la corrida si hay muchos pendientes. La hora se cambia con `DGA_RETRY_CRON_SCHEDULE` en `API/.env`, seguida de un `restart -t 15 api`.
+
 ## SENDER y su cron
+
+**El SENDER quedó reemplazado por el reintento diario de la API, y su cron tiene que seguir apagado.** Si los dos corrieran, cada medición fallida se reenviaría dos veces al día. Lo que sigue describe cómo funcionaba, hasta que el servicio se elimine.
 
 El SENDER reenvía una vez al día los reportes que quedaron sin enviar. Pide a la API una página de hasta 100 pendientes (`/fetchUnsentReports`) y los reenvía uno por uno (`/repostToDGA`), con 5 minutos de espera entre cada envío. Su funcionamiento depende de tres piezas, y ninguna se recupera sola:
 

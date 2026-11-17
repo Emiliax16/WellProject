@@ -148,6 +148,14 @@ const otroEnviadoEnLaMismaHora = async (wellData) => {
  */
 const processAndPostData = async (wellData, well) => {
   try {
+    // Se relee el reporte justo antes de decidir. Quien llama puede tenerlo
+    // cargado desde hace minutos: el reenvío manual del portal carga el lote
+    // completo y lo procesa de a 3, y el reintento diario corre durante horas.
+    // Sin releerlo, uno podía retransmitir lo que el otro ya había enviado.
+    if (typeof wellData.reload === "function") {
+      await wellData.reload();
+    }
+
     // Un reporte que ya está enviado no se vuelve a transmitir, aunque alguien
     // lo reenvíe por la API: la DGA advierte que retransmitir puede bloquear al
     // centro de control.

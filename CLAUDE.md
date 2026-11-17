@@ -7,7 +7,7 @@ Esta documentación proporciona una guía completa para trabajar con el backend 
 **WellProject** es un sistema backend que consta de dos servicios principales para la administración de pozos de agua en Chile y el envío automático de reportes a la DGA (Dirección General de Aguas):
 
 1. **API** (Node.js/Express) - Servicio principal de lógica de negocio, CRUD y autenticación
-2. **SENDER** (Ruby on Rails) - Servicio de envío programado (cron jobs) de reportes a la DGA
+2. **SENDER** (Ruby on Rails) - Reenviaba a la DGA los reportes no enviados. Quedó reemplazado por el reintento diario de la API (`src/jobs/dga-retry.js`) y su cron debe seguir apagado hasta que se elimine
 
 Este documento se enfoca principalmente en el **API** (el servicio SENDER tiene su propia documentación).
 
@@ -800,7 +800,19 @@ function errorHandler(err, req, res, next) {
 
 **Rechazo por duplicado**: los pozos pueden enviar más de un reporte por hora y la DGA rechaza los siguientes con "Ya existe un registro en esa fecha, hora para la obra". Como la hora sí quedó registrada en la DGA, `processAndPostData` trata ese rechazo como envío exitoso y marca el reporte con `sent = true`. Los reportes rechazados así antes del PR #97 (noviembre de 2026) siguen con `sent = false`.
 
+### Reintento diario (`src/jobs/dga-retry.js`)
+
+Reenvía a la DGA los reportes que no recibieron `00`. Corre dentro de la API, una vez al día a las 03:00 (`DGA_RETRY_CRON_SCHEDULE`), y reemplaza al SENDER. Sigue la sección 6 del documento de transmisión de la DGA:
+
+- **§6.2:** cada medición fallida se reenvía una vez al día, a partir del día siguiente, hasta recibir `00`. La ventana es de 35 días.
+- **§6.1:** las mediciones atrasadas se envían de a una, con 5 minutos entre cada envío. Cada corrida envía como máximo 250, y el resto queda para el día siguiente.
+- **§6.3:** no se retransmite lo que la DGA ya tiene. Se envía una sola medición por pozo, fecha y hora (la primera que llegó), y se omite toda hora que ya tenga un reporte enviado.
+
+Solo toma reportes de pozos activos, creados en días anteriores al de la corrida (y hace más de 2 horas, para dar tiempo al envío automático) y después de la última activación del pozo (`editStatusDate`, que el modelo `well` fija cada vez que cambia `isActived`). Un rechazo o un error no detiene la corrida: se registra y sigue con el siguiente. `processAndPostData` relee el reporte antes de decidir, para que nadie que lo tenga cargado de antes retransmita lo que otro ya envió.
+
 ### Servicio SENDER (Ruby on Rails)
+
+**Reemplazado por el reintento diario de la API.** Su cron debe seguir apagado: si los dos corrieran, una misma medición fallida se reenviaría dos veces al día.
 
 **Ubicación**: `SENDER/wellproject/`
 
@@ -843,6 +855,7 @@ EMAIL_PASS=your_app_password
 # Alertas de monitoreo de pozos
 ALERT_EMAIL_TO=destino@example.com
 ALERT_CRON_SCHEDULE=0 8 * * *    # una vez al día; la alerta asume chequeos cada 24 h
+DGA_RETRY_CRON_SCHEDULE=0 3 * * *    # reintento diario a la DGA
 CRON_TIMEZONE=America/Santiago
 
 # Clave compartida con el SENDER (mínimo 32 caracteres: openssl rand -hex 32)
@@ -969,8 +982,8 @@ npm test
 # Tests de modelos
 npm run test:models
 
-# Tests de migraciones (reconstruye la base de pruebas con las migraciones)
-npm run test:migrations
+# Tests con base real: migraciones y consultas SQL (reconstruye la base de pruebas)
+npm run test:db
 ```
 
 Producción corre con `node src/server.js`: si el proceso termina por un error, Docker reinicia el contenedor. nodemon queda solo para desarrollo; en docker-compose se activa con un `docker-compose.override.yml` local (ver `API/README.md`).
@@ -1015,16 +1028,16 @@ npx sequelize-cli model:generate --name User --attributes name:string,email:stri
 ```json
 {
   "scripts": {
-    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models tests/migrations",
+    "test": "NODE_ENV=test jest --testPathIgnorePatterns tests/models tests/migrations tests/db",
     "test:models": "NODE_ENV=test jest tests/models",
-    "test:migrations": "NODE_ENV=test jest --runInBand tests/migrations"
+    "test:db": "NODE_ENV=test jest --runInBand tests/migrations tests/db"
   }
 }
 ```
 
 **Faker**: `@faker-js/faker` para generar datos de prueba
 
-**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR que cambia `API/`. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`. Los de `tests/migrations` reconstruyen la base de pruebas ejecutando todas las migraciones, para probarlas sobre el mismo esquema que producción; corren con `npm run test:migrations` y en un segundo job del CI con Postgres 14.11.
+**Estado actual**: `npm test` cubre controladores, middlewares y utilidades con los modelos mockeados, sin base de datos ni red, y corre en el CI de cada PR que cambia `API/`. Los tests de `tests/models` usan una base real y la limpian, por eso van aparte en `npm run test:models`. Los de `tests/migrations` y `tests/db` reconstruyen la base de pruebas ejecutando todas las migraciones, para probar las migraciones y las consultas SQL propias sobre el mismo esquema que producción; corren con `npm run test:db` y en un segundo job del CI con Postgres 14.11.
 
 ## Deployment
 

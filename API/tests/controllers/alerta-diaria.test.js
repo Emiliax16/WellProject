@@ -226,6 +226,7 @@ describe('programación del chequeo', () => {
     const monitoreo = { runAlertCheck: jest.fn().mockResolvedValue({ sent: false }) };
     jest.doMock('node-cron', () => cron);
     jest.doMock('../../src/controllers/monitoring.controller', () => monitoreo);
+    jest.doMock('../../src/jobs/dga-retry', () => ({ reintentarPendientes: jest.fn() }));
     jest.spyOn(console, 'log').mockImplementation(() => {});
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     require('../../src/jobs/scheduler').startSchedulers();
@@ -236,6 +237,7 @@ describe('programación del chequeo', () => {
     delete process.env.ALERT_CRON_SCHEDULE;
     jest.dontMock('node-cron');
     jest.dontMock('../../src/controllers/monitoring.controller');
+    jest.dontMock('../../src/jobs/dga-retry');
     console.log.mockRestore?.();
     console.warn.mockRestore?.();
   });
@@ -262,7 +264,7 @@ describe('programación del chequeo', () => {
     const { warn } = cargarScheduler('0 0,8,16 * * *');
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain('corre más de una vez al día');
+    expect(warn.mock.calls[0][0]).toContain('ALERT_CRON_SCHEDULE="0 0,8,16 * * *" corre más de una vez al día');
   });
 
   it.each(['0 8 * * *', '30 7 * * 1-5'])('no avisa con una sola hora al día (%s)', (programacion) => {
