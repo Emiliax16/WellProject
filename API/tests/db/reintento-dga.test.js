@@ -15,7 +15,8 @@ jest.mock('axios', () => ({
   post: jest.fn(),
 }));
 
-const { sequelize } = require('../../models');
+const { sequelize, wellData: WellData } = require('../../models');
+const processAndPostData = require('../../src/services/wellData/handleSendData.service');
 const { migrarTodo } = require('../helpers/migrar');
 const { reintentarPendientes, SEPARACION_MS } = require('../../src/jobs/dga-retry');
 
@@ -123,12 +124,14 @@ describe('reintento diario a la DGA', () => {
     });
 
     test('reconocer la misma hora escrita con y sin cero inicial', async () => {
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '09:01', sent: true });
+      const yaEnviado = await insertarReporte('OB-0902-639', { creadoHaceHoras: 20, hour: '09:01', sent: true });
       await insertarReporte('OB-0902-639', { creadoHaceHoras: 19.5, hour: '9:31' });
 
-      await correr();
+      const resultado = await correr();
 
       expect(mockPost).not.toHaveBeenCalled();
+      expect(await enviados()).toEqual([yaEnviado]);
+      expect(resultado.pendientes).toBe(0);
     });
 
     test('tratar como horas distintas las de dos fechas distintas', async () => {
@@ -163,9 +166,23 @@ describe('reintento diario a la DGA', () => {
     });
 
     test('dejar fuera los reportes de las últimas 2 horas, que todavía puede enviar el envío automático', async () => {
-      await insertarReporte('OB-0902-639', { creadoHaceHoras: 1.5, hour: '01:31' });
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 1.5, date: '17/11/2026', hour: '01:31' });
 
       expect(await correr()).toEqual({ pendientes: 0, aceptados: 0, fallidos: 0, omitidos: 0 });
+    });
+
+    test('dejar para mañana una falla de hoy aunque tenga más de 2 horas, porque la DGA pide reenviar el día siguiente', async () => {
+      await insertarReporte('OB-0902-639', { creadoHaceHoras: 2.5, date: '17/11/2026', hour: '00:31' });
+
+      expect((await correr()).pendientes).toBe(0);
+    });
+
+    test('incluir una falla de ayer a las 23:30', async () => {
+      const ayer = await insertarReporte('OB-0902-639', { creadoHaceHoras: 3.5, date: '16/11/2026', hour: '23:31' });
+
+      await correr();
+
+      expect(await enviados()).toEqual([ayer]);
     });
 
     test('incluir reportes de hasta 35 días y dejar fuera los más antiguos', async () => {
@@ -187,8 +204,33 @@ describe('reintento diario a la DGA', () => {
       expect(await enviados()).toEqual([aceptado]);
       expect(resultado).toEqual({ pendientes: 2, aceptados: 1, fallidos: 1, omitidos: 0 });
       expect(console.error).toHaveBeenCalledWith(
-        `[reintento-dga] la DGA no aceptó el reporte ${rechazado} (OB-0902-639 16/11/2026 00:01): No se pudo enviar los datos a la DGA. Por favor revisa bien los parámetros que estás enviando`
+        `[reintento-dga] falló el reintento del reporte ${rechazado} (OB-0902-639 16/11/2026 00:01): No se pudo enviar los datos a la DGA. Por favor revisa bien los parámetros que estás enviando`
       );
+    });
+
+    test('seguir con los demás si falla la lectura de un reporte en la base', async () => {
+      const primero = await insertarReporte('OB-0902-639', { creadoHaceHoras: 30, hour: '00:01' });
+      const segundo = await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
+      jest.spyOn(WellData, 'findByPk').mockRejectedValueOnce(new Error('Connection terminated unexpectedly'));
+
+      const resultado = await correr();
+
+      expect(await enviados()).toEqual([segundo]);
+      expect(resultado).toEqual({ pendientes: 2, aceptados: 1, fallidos: 1, omitidos: 0 });
+      expect(console.error).toHaveBeenCalledWith(
+        `[reintento-dga] falló el reintento del reporte ${primero}: Connection terminated unexpectedly`
+      );
+    });
+
+    test('impedir que quien cargó el reporte antes de la corrida lo retransmita después', async () => {
+      const id = await insertarReporte('OB-0902-639', { creadoHaceHoras: 10, hour: '18:01' });
+      const cargadoAntes = await WellData.findByPk(id);
+      const pozo = await cargadoAntes.getWell();
+
+      await correr();
+      await processAndPostData(cargadoAntes, pozo);
+
+      expect(mockPost).toHaveBeenCalledTimes(1);
     });
 
     test('marcar como enviado el reporte que la DGA rechaza porque ya tiene esa hora', async () => {
@@ -246,13 +288,14 @@ describe('reintento diario a la DGA', () => {
   });
 
   describe('según el estado del pozo', () => {
-    test('omitir los pozos inactivos', async () => {
+    test('omitir los pozos inactivos desde la selección, sin ocupar el máximo por corrida', async () => {
       await insertarPozo('OB-0701-1496', { activo: false });
       await insertarReporte('OB-0701-1496', { creadoHaceHoras: 10, hour: '18:01' });
 
-      await correr();
+      const resultado = await correr();
 
       expect(mockPost).not.toHaveBeenCalled();
+      expect(resultado.pendientes).toBe(0);
     });
 
     test('incluir un pozo activo sin editStatusDate (#69)', async () => {

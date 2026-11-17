@@ -273,7 +273,7 @@ Hasta noviembre de 2026 la API corría con nodemon, el contenedor no tenía heal
 
 ## Reintento diario a la DGA
 
-La API reenvía una vez al día, a las 03:00 de `CRON_TIMEZONE`, los reportes que la DGA no aceptó en los últimos 35 días. Envía una medición por pozo y hora, con 5 minutos entre cada envío, como pide el documento de transmisión de la DGA, y como máximo 250 por corrida. El detalle de qué reportes toma está en `src/jobs/dga-retry.js`. Reemplaza al SENDER.
+La API reenvía una vez al día, a las 03:00 de `CRON_TIMEZONE`, los reportes de días anteriores que la DGA no aceptó, hasta 35 días hacia atrás. Envía una medición por pozo y hora, con 5 minutos entre cada envío, como pide el documento de transmisión de la DGA, y como máximo 250 por corrida. El detalle de qué reportes toma está en `src/jobs/dga-retry.js`. Reemplaza al SENDER.
 
 Cada corrida deja estas líneas en el log de la API:
 
@@ -281,7 +281,7 @@ Cada corrida deja estas líneas en el log de la API:
 sudo docker logs api --since 24h 2>&1 | grep -aE '\[reintento-dga\]|reintento a la DGA'
 ```
 
-La primera dice cuántas mediciones quedaron pendientes y la última resume cuántas aceptó la DGA, cuántas rechazó y cuántas se omitieron porque se enviaron o el pozo se desactivó mientras esperaban su turno. Cada rechazo aparece con el reporte, la obra, la fecha y la hora, sin credenciales.
+La primera dice cuántas mediciones quedaron pendientes y la última resume cuántas aceptó la DGA, cuántas fallaron y cuántas se omitieron porque se enviaron o el pozo se desactivó mientras esperaban su turno. Cada falla aparece como `falló el reintento del reporte` con la obra, la fecha, la hora y el motivo, sin credenciales.
 
 Como el job vive dentro del proceso de la API, un reinicio a mitad de una corrida la corta. No queda nada a medias: lo que falte se toma al día siguiente. Por eso conviene no desplegar entre las 03:00 y el fin de la corrida si hay muchos pendientes. La hora se cambia con `DGA_RETRY_CRON_SCHEDULE` en `API/.env`, seguida de un `restart -t 15 api`.
 

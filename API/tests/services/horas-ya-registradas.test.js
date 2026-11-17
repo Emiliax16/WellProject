@@ -47,6 +47,9 @@ const hacerReporte = (campos = {}) => {
     ...campos,
   });
   jest.spyOn(reporte, 'update').mockResolvedValue(reporte);
+  // `processAndPostData` relee el reporte antes de decidir. Sin base, la
+  // relectura deja el reporte como está, salvo que el test diga otra cosa.
+  jest.spyOn(reporte, 'reload').mockResolvedValue(reporte);
   return reporte;
 };
 
@@ -168,6 +171,30 @@ describe('processAndPostData si falla la consulta de la hora', () => {
     const reporte = hacerReporte();
 
     await expect(processAndPostData(reporte, POZO)).rejects.toThrow('connection terminated');
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(reporte.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('processAndPostData con un reporte cargado hace rato', () => {
+  it('relee el reporte antes de decidir si lo envía', async () => {
+    const reporte = hacerReporte();
+
+    await processAndPostData(reporte, POZO);
+
+    expect(reporte.reload).toHaveBeenCalledTimes(1);
+    expect(reporte.reload.mock.invocationCallOrder[0]).toBeLessThan(mockPost.mock.invocationCallOrder[0]);
+  });
+
+  it('no lo transmite si otro proceso lo envió después de cargarlo', async () => {
+    const reporte = hacerReporte();
+    reporte.reload.mockImplementation(async () => {
+      reporte.sent = true;
+      return reporte;
+    });
+
+    await expect(processAndPostData(reporte, POZO)).resolves.toBe(true);
 
     expect(mockPost).not.toHaveBeenCalled();
     expect(reporte.update).not.toHaveBeenCalled();

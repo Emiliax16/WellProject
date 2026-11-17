@@ -28,6 +28,25 @@ const correMasDeUnaVezAlDia = (expresion) => {
 // así que la ejecución de ese día se perdería en vez de atrasarse.
 const OPCIONES = { timezone: TIMEZONE, recoverMissedExecutions: true };
 
+// Con `recoverMissedExecutions`, node-cron 3.0.3 dispara cada tarea dos veces,
+// con un segundo de diferencia: en cada tick revisa también el segundo anterior,
+// y su registro de la última ejecución no guarda los milisegundos, así que ese
+// segundo le parece pendiente. Sin este guard, la alerta podía mandar dos
+// correos y el reintento podía transmitir dos veces seguidas una medición que
+// la DGA rechaza rápido. Ninguna programación válida corre dos veces en el
+// mismo minuto, así que basta con ignorar la segunda llamada de ese minuto.
+const unaVezPorMinuto = (tarea) => {
+  let ultimoMinuto = null;
+  return async () => {
+    const minuto = Math.floor(Date.now() / 60000);
+    if (minuto === ultimoMinuto) {
+      return;
+    }
+    ultimoMinuto = minuto;
+    await tarea();
+  };
+};
+
 const programarAlerta = () => {
   if (!cron.validate(ALERT_CRON_SCHEDULE)) {
     console.error(`[scheduler] Expresión cron inválida en ALERT_CRON_SCHEDULE: "${ALERT_CRON_SCHEDULE}". No se programa el monitoreo de pozos.`);
@@ -42,7 +61,7 @@ const programarAlerta = () => {
 
   cron.schedule(
     ALERT_CRON_SCHEDULE,
-    async () => {
+    unaVezPorMinuto(async () => {
       const startedAt = new Date().toISOString();
       console.log(`[scheduler] ejecutando monitoreo de pozos a ${startedAt}`);
       try {
@@ -51,7 +70,7 @@ const programarAlerta = () => {
       } catch (error) {
         console.error('[scheduler] error al ejecutar monitoreo:', error.message);
       }
-    },
+    }),
     OPCIONES
   );
 
@@ -75,14 +94,14 @@ const programarReintento = () => {
 
   cron.schedule(
     DGA_RETRY_CRON_SCHEDULE,
-    async () => {
+    unaVezPorMinuto(async () => {
       console.log(`[scheduler] ejecutando reintento a la DGA a ${new Date().toISOString()}`);
       try {
         await reintentarPendientes();
       } catch (error) {
         console.error('[scheduler] error al ejecutar el reintento a la DGA:', error.message);
       }
-    },
+    }),
     OPCIONES
   );
 
@@ -94,4 +113,4 @@ const startSchedulers = () => {
   programarReintento();
 };
 
-module.exports = { startSchedulers, _internal: { correMasDeUnaVezAlDia } };
+module.exports = { startSchedulers, _internal: { correMasDeUnaVezAlDia, unaVezPorMinuto } };

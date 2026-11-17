@@ -28,6 +28,7 @@
 //   ahora la fija cada vez que cambia `isActived`, pero los pozos anteriores a
 //   ese cambio pueden tenerla vacía.
 
+const moment = require('moment-timezone');
 const { sequelize, wellData: WellData } = require('../../models');
 const processAndPostData = require('../services/wellData/handleSendData.service');
 
@@ -36,6 +37,12 @@ const DIAS_DE_VENTANA = 35;
 // Margen para que el envío automático del hook `afterCreate` haya tenido su
 // oportunidad, igual que en `fetchUnsentReports`.
 const HORAS_DE_GRACIA = 2;
+
+// §6.2 pide reenviar "el día siguiente del envío fallido". Por eso solo entran
+// reportes de días anteriores al de la corrida, en hora de Chile: una falla de
+// las 00:30 se reintenta a las 03:00 del día siguiente, no dos horas y media
+// después.
+const ZONA = 'America/Santiago';
 
 // §6.1: al menos 5 minutos entre cada envío de mediciones atrasadas.
 const SEPARACION_MS = 5 * 60 * 1000;
@@ -55,7 +62,11 @@ const HORA_SQL = (tabla) =>
 // ya otro reporte enviado. Solo trae ids, para que la consulta no cargue
 // filas completas en memoria.
 const buscarPendientes = async ({ ahora = new Date(), maximo = MAXIMO_POR_CORRIDA } = {}) => {
-  const hasta = new Date(ahora.getTime() - HORAS_DE_GRACIA * 60 * 60 * 1000);
+  const conGracia = ahora.getTime() - HORAS_DE_GRACIA * 60 * 60 * 1000;
+  const inicioDelDia = moment(ahora).tz(ZONA).startOf('day').valueOf();
+  // `createdAt < hasta`, para que un reporte creado justo a medianoche cuente
+  // como del día de la corrida.
+  const hasta = new Date(Math.min(conGracia, inicioDelDia));
   const desde = new Date(ahora.getTime() - DIAS_DE_VENTANA * 24 * 60 * 60 * 1000);
 
   const [filas] = await sequelize.query(
@@ -66,7 +77,7 @@ const buscarPendientes = async ({ ahora = new Date(), maximo = MAXIMO_POR_CORRID
         JOIN wells w ON w.code = d.code
        WHERE d.sent = false
          AND d."createdAt" >= :desde
-         AND d."createdAt" <= :hasta
+         AND d."createdAt" < :hasta
          AND w."isActived" = true
          AND (w."editStatusDate" IS NULL OR d."createdAt" >= w."editStatusDate")
     ),
@@ -131,30 +142,33 @@ const reintentarPendientes = async ({
     let transmitioAntes = false;
 
     for (const id of ids) {
-      // La corrida puede durar horas: cada reporte y su pozo se vuelven a leer
-      // justo antes de enviarlo, por si se envió o se desactivó entre medio. Si
-      // hay que esperar los 5 minutos, se leen otra vez después de la espera.
-      let { reporte, pozo } = await leerEnviable(id);
-      if (reporte && transmitioAntes) {
-        await esperar(SEPARACION_MS);
-        ({ reporte, pozo } = await leerEnviable(id));
-      }
-      if (!reporte) {
-        resultado.omitidos += 1;
-        continue;
-      }
-      transmitioAntes = true;
-
+      let reporte = null;
       try {
+        // La corrida puede durar horas: cada reporte y su pozo se vuelven a leer
+        // justo antes de enviarlo, por si se envió o se desactivó entre medio.
+        // Si hay que esperar los 5 minutos, se leen otra vez después.
+        let pozo;
+        ({ reporte, pozo } = await leerEnviable(id));
+        if (reporte && transmitioAntes) {
+          await esperar(SEPARACION_MS);
+          ({ reporte, pozo } = await leerEnviable(id));
+        }
+        if (!reporte) {
+          resultado.omitidos += 1;
+          continue;
+        }
+        transmitioAntes = true;
+
         await processAndPostData(reporte, pozo);
         resultado.aceptados += 1;
       } catch (error) {
-        // Solo el mensaje: un error de axios completo podría arrastrar el cuerpo
-        // enviado, que lleva las credenciales DGA del pozo.
+        // Puede ser un rechazo de la DGA, un timeout o un error propio, como
+        // la base caída: en ningún caso se corta la corrida. Solo se registra
+        // el mensaje, porque un error de axios completo podría arrastrar el
+        // cuerpo enviado, que lleva las credenciales DGA del pozo.
         resultado.fallidos += 1;
-        console.error(
-          `[reintento-dga] la DGA no aceptó el reporte ${id} (${reporte.code} ${reporte.date} ${reporte.hour}): ${error.message}`
-        );
+        const detalle = reporte ? ` (${reporte.code} ${reporte.date} ${reporte.hour})` : '';
+        console.error(`[reintento-dga] falló el reintento del reporte ${id}${detalle}: ${error.message}`);
       }
     }
 

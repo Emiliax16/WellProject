@@ -57,7 +57,9 @@ module.exports = (sequelize, DataTypes) => {
       // los de un período inactivo no se envían. Antes solo la fijaba el botón
       // de activar, así que crear un pozo activo o cambiarlo desde el formulario
       // de edición la dejaba vacía o vieja (#69). Desde el hook vale para
-      // cualquier camino que guarde el pozo.
+      // `create`, `save()` y `update(valores)`, que son los caminos que usa la
+      // API. No corre con `Model.update` estático ni con `bulkCreate`, y no se
+      // guarda si se llama con la opción `fields` sin incluir `editStatusDate`.
       beforeSave: (pozo) => {
         const cambioDeEstado = pozo.isNewRecord ? pozo.isActived === true : pozo.changed('isActived');
         if (cambioDeEstado) {

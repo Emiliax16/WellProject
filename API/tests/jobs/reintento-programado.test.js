@@ -16,8 +16,9 @@ const cargarScheduler = ({ alerta, reintento } = {}) => {
 
   const cron = { validate: jest.fn((expresion) => expresion !== 'no es cron'), schedule: jest.fn() };
   const job = { reintentarPendientes: jest.fn().mockResolvedValue({ pendientes: 0 }) };
+  const monitoreo = { runAlertCheck: jest.fn().mockResolvedValue({ sent: false }) };
   jest.doMock('node-cron', () => cron);
-  jest.doMock('../../src/controllers/monitoring.controller', () => ({ runAlertCheck: jest.fn() }));
+  jest.doMock('../../src/controllers/monitoring.controller', () => monitoreo);
   jest.doMock('../../src/jobs/dga-retry', () => job);
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});
   const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -26,10 +27,11 @@ const cargarScheduler = ({ alerta, reintento } = {}) => {
   require('../../src/jobs/scheduler').startSchedulers();
 
   const programacion = (expresion) => cron.schedule.mock.calls.find(([e]) => e === expresion);
-  return { cron, job, log, warn, error, programacion };
+  return { cron, job, monitoreo, log, warn, error, programacion };
 };
 
 afterEach(() => {
+  jest.useRealTimers();
   delete process.env.ALERT_CRON_SCHEDULE;
   delete process.env.DGA_RETRY_CRON_SCHEDULE;
   jest.dontMock('node-cron');
@@ -97,5 +99,46 @@ describe('programación del reintento a la DGA', () => {
     expect(error).toHaveBeenCalledWith(
       '[scheduler] Expresión cron inválida en DGA_RETRY_CRON_SCHEDULE: "no es cron". No se programa el reintento a la DGA.'
     );
+  });
+});
+
+// node-cron 3.0.3 con `recoverMissedExecutions` dispara cada tarea dos veces,
+// con un segundo de diferencia.
+describe('doble disparo de node-cron', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date('2026-11-17T06:00:00.000Z'), doNotFake: ['nextTick', 'setImmediate'] });
+  });
+
+  test('ejecutar el reintento una sola vez si node-cron lo dispara dos veces en el mismo minuto', async () => {
+    const { programacion, job } = cargarScheduler();
+    const disparar = programacion('0 3 * * *')[1];
+
+    await disparar();
+    jest.setSystemTime(new Date('2026-11-17T06:00:01.000Z'));
+    await disparar();
+
+    expect(job.reintentarPendientes).toHaveBeenCalledTimes(1);
+  });
+
+  test('ejecutar la alerta una sola vez si node-cron la dispara dos veces en el mismo minuto', async () => {
+    const { programacion, monitoreo } = cargarScheduler();
+    const disparar = programacion('0 8 * * *')[1];
+
+    await disparar();
+    jest.setSystemTime(new Date('2026-11-17T06:00:01.000Z'));
+    await disparar();
+
+    expect(monitoreo.runAlertCheck).toHaveBeenCalledTimes(1);
+  });
+
+  test('volver a ejecutar el reintento en su siguiente programación', async () => {
+    const { programacion, job } = cargarScheduler();
+    const disparar = programacion('0 3 * * *')[1];
+
+    await disparar();
+    jest.setSystemTime(new Date('2026-11-18T06:00:00.000Z'));
+    await disparar();
+
+    expect(job.reintentarPendientes).toHaveBeenCalledTimes(2);
   });
 });
