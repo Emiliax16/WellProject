@@ -309,6 +309,33 @@ describe('runAlertCheck con mediciones que no llegaron a la DGA', () => {
     expect(mockResumenSinAceptar).toHaveBeenCalledWith({ ahora: AHORA });
   });
 
+  it('cuenta en el asunto solo los pozos con horas de ayer, aunque la tabla traiga también recordatorios', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([
+      sinEntrega({ deAyer: 1 }),
+      sinEntrega({ code: 'OB-1304-1749', name: 'Pozo Norte', deAyer: 0, total: 4 }),
+    ]);
+
+    const resultado = await chequeoDiario();
+
+    const correo = mockSendMail.mock.calls[0][0];
+    expect(correo.subject).toBe('[Promedición] 1 pozo(s) con mediciones que no llegaron a la DGA');
+    expect(correo.html).toContain('Pozo Norte');
+    expect(correo.html).toContain('Una fila con 0 horas de ayer solo tiene pendientes de días anteriores.');
+    expect(resultado).toMatchObject({ undeliveredWells: 2, undeliveredYesterday: 1 });
+  });
+
+  it('escapa el código del pozo en la sección de entrega', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega({ code: '<i>OB-1</i>' })]);
+
+    await chequeoDiario();
+
+    const { html } = mockSendMail.mock.calls[0][0];
+    expect(html).toContain('&lt;i&gt;OB-1&lt;/i&gt;');
+    expect(html).not.toContain('<i>OB-1</i>');
+  });
+
   it('escapa el nombre del pozo en la sección de entrega', async () => {
     configurarPozos(pozoAlDia);
     mockResumenSinAceptar.mockResolvedValue([sinEntrega({ name: '<b>Pozo</b>' })]);
