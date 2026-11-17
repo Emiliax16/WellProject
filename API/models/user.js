@@ -21,9 +21,11 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       user.hasOne(models.person, { foreignKey: 'userId', onDelete: 'CASCADE' });
       // RESTRICT, igual que la foreign key de la base (#83): un rol con usuarios no
-      // se puede borrar. Va también en `role.hasMany`, que define la misma
-      // restricción: sin las dos, Sequelize asume CASCADE porque `roleId` no admite
-      // null, y un `sync` crea una base que borra a los usuarios junto con su rol.
+      // se puede borrar. La que manda hoy es la de `role.hasMany`: `models/index.js`
+      // asocia los modelos en orden alfabético y Sequelize conserva el primer
+      // `onDelete` que recibe el atributo. Esta queda por si ese orden cambia. Sin
+      // ninguna de las dos, Sequelize asume CASCADE porque `roleId` no admite null,
+      // y un `sync` crea una base que borra a los usuarios junto con su rol.
       user.belongsTo(models.role, { foreignKey: 'roleId', onDelete: 'RESTRICT' });
       user.hasOne(models.client, { foreignKey: 'userId', onDelete: 'CASCADE' });
       user.hasOne(models.company, { foreignKey: 'userId', onDelete: 'CASCADE' });

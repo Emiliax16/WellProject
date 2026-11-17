@@ -14,6 +14,13 @@
 //   controladores borran la empresa o la distribuidora antes que su usuario,
 //   así que por esa vía nada cambia; lo que cambia es que borrar el usuario por
 //   cualquier otro camino ya no deja la cuenta huérfana.
+//
+//   Ojo con el alcance de ese CASCADE. `clients.companyId`, `wells.clientId` y
+//   `wellData.code` ya borran en cascada, así que borrar el usuario de una
+//   empresa, incluso con un DELETE a mano en psql, se lleva la empresa, sus
+//   clientes, sus pozos y todos sus reportes. Los usuarios de esos clientes
+//   quedan, sin cliente. Es lo mismo que ya hace `deleteCompany`, pero hay que
+//   tenerlo presente antes de cualquier limpieza manual.
 // - `users.roleId`: RESTRICT. Un rol en uso no se puede borrar. Con CASCADE,
 //   borrar un rol se llevaría a todos sus usuarios y, en cadena, a sus
 //   empresas, clientes, pozos y reportes.

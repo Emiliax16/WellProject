@@ -9,6 +9,7 @@
 
 const { sequelize, Sequelize } = require('../../models');
 const { migrarHastaAntesDe, cargar } = require('../helpers/migrar');
+const { assertSafeToWipe } = require('../helpers/safe-database');
 
 const MIGRACION = '20261117000000-add-missing-foreign-keys.js';
 const migracion = cargar(MIGRACION);
@@ -48,6 +49,17 @@ const restriccionesNuevas = () =>
      WHERE contype = 'f'
        AND conname IN ('companies_userId_fkey', 'distributors_userId_fkey', 'users_roleId_fkey')
      ORDER BY conname`);
+
+// El error de Postgres que produjo una operación, por código y restricción.
+// Se compara eso y no el mensaje, que Postgres traduce según `lc_messages`.
+// 23503 es foreign_key_violation y 42710, duplicate_object.
+const errorDePostgres = (promesa) =>
+  promesa.then(
+    () => {
+      throw new Error('La operación debía fallar y terminó bien');
+    },
+    (error) => ({ codigo: error.parent.code, restriccion: error.parent.constraint })
+  );
 
 const subir = () => migracion.up(sequelize.getQueryInterface(), Sequelize);
 const bajar = () => migracion.down(sequelize.getQueryInterface(), Sequelize);
@@ -110,27 +122,22 @@ describe('migración de las foreign keys faltantes (#83)', () => {
     });
 
     test('rechazar una empresa cuyo usuario no existe', async () => {
-      await expect(insertarEmpresa(2, 999)).rejects.toThrow(
-        'insert or update on table "companies" violates foreign key constraint "companies_userId_fkey"'
-      );
+      expect(await errorDePostgres(insertarEmpresa(2, 999))).toEqual({ codigo: '23503', restriccion: 'companies_userId_fkey' });
     });
 
     test('rechazar una distribuidora cuyo usuario no existe', async () => {
-      await expect(insertarDistribuidora(2, 999)).rejects.toThrow(
-        'insert or update on table "distributors" violates foreign key constraint "distributors_userId_fkey"'
-      );
+      expect(await errorDePostgres(insertarDistribuidora(2, 999))).toEqual({ codigo: '23503', restriccion: 'distributors_userId_fkey' });
     });
 
     test('rechazar un usuario con un rol inexistente', async () => {
-      await expect(insertarUsuario(40, 99)).rejects.toThrow(
-        'insert or update on table "users" violates foreign key constraint "users_roleId_fkey"'
-      );
+      expect(await errorDePostgres(insertarUsuario(40, 99))).toEqual({ codigo: '23503', restriccion: 'users_roleId_fkey' });
     });
 
     test('impedir borrar un rol que tiene usuarios, sin tocar a esos usuarios', async () => {
-      await expect(sequelize.query('DELETE FROM roles WHERE id = 2')).rejects.toThrow(
-        'update or delete on table "roles" violates foreign key constraint "users_roleId_fkey" on table "users"'
-      );
+      expect(await errorDePostgres(sequelize.query('DELETE FROM roles WHERE id = 2'))).toEqual({
+        codigo: '23503',
+        restriccion: 'users_roleId_fkey',
+      });
 
       expect(await consultar('SELECT id FROM users WHERE "roleId" = 2')).toEqual([{ id: 30 }]);
     });
@@ -146,6 +153,7 @@ describe('migración de las foreign keys faltantes (#83)', () => {
 
   describe('modelos', () => {
     beforeEach(async () => {
+      assertSafeToWipe();
       await sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
       await sequelize.sync();
     });
@@ -155,6 +163,23 @@ describe('migración de las foreign keys faltantes (#83)', () => {
         { conname: 'companies_userId_fkey', confdeltype: 'c', confupdtype: 'c' },
         { conname: 'distributors_userId_fkey', confdeltype: 'c', confupdtype: 'c' },
         { conname: 'users_roleId_fkey', confdeltype: 'r', confupdtype: 'c' },
+      ]);
+    });
+  });
+
+  describe('si una de las restricciones ya existe', () => {
+    beforeEach(async () => {
+      await sequelize.query(
+        'ALTER TABLE users ADD CONSTRAINT "users_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES roles (id)'
+      );
+    });
+
+    test('fallar sin dejar creadas las que alcanzó a agregar antes', async () => {
+      expect(await errorDePostgres(subir())).toEqual({ codigo: '42710', restriccion: undefined });
+
+      // Solo queda la que ya estaba, con su acción por defecto (`a` = NO ACTION).
+      expect(await restriccionesNuevas()).toEqual([
+        { conname: 'users_roleId_fkey', confdeltype: 'a', confupdtype: 'a' },
       ]);
     });
   });
