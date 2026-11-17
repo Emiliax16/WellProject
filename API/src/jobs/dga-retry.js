@@ -28,21 +28,18 @@
 //   ahora la fija cada vez que cambia `isActived`, pero los pozos anteriores a
 //   ese cambio pueden tenerla vacía.
 
-const moment = require('moment-timezone');
-const { sequelize, wellData: WellData } = require('../../models');
+const { wellData: WellData } = require('../../models');
 const processAndPostData = require('../services/wellData/handleSendData.service');
+const { iniciarCorrida, terminarCorrida } = require('./estado-reintento');
+const {
+  buscarPendientes: buscarEnLaBase,
+  DIAS_DE_VENTANA,
+  HORAS_DE_GRACIA,
+} = require('../services/wellData/pendientesDga.service');
 
-const DIAS_DE_VENTANA = 35;
-
-// Margen para que el envío automático del hook `afterCreate` haya tenido su
-// oportunidad, igual que en `fetchUnsentReports`.
-const HORAS_DE_GRACIA = 2;
-
-// §6.2 pide reenviar "el día siguiente del envío fallido". Por eso solo entran
-// reportes de días anteriores al de la corrida, en hora de Chile: una falla de
-// las 00:30 se reintenta a las 03:00 del día siguiente, no dos horas y media
-// después.
-const ZONA = 'America/Santiago';
+// Qué cuenta como pendiente (pozo activo, días anteriores, 35 días, una
+// medición por hora y sin horas ya enviadas) está en `pendientesDga.service.js`,
+// que comparte con la alerta de las 08:00.
 
 // §6.1: al menos 5 minutos entre cada envío de mediciones atrasadas.
 const SEPARACION_MS = 5 * 60 * 1000;
@@ -51,60 +48,8 @@ const SEPARACION_MS = 5 * 60 * 1000;
 // termina antes de la siguiente. Lo que exceda queda para el día siguiente.
 const MAXIMO_POR_CORRIDA = 250;
 
-// La hora de un reporte (`HH:mm`, `H:mm` o con segundos) como número. Si no
-// tiene ese formato, el texto completo hace de hora, para que ese reporte forme
-// su propio grupo en vez de quedar fuera.
-const HORA_SQL = (tabla) =>
-  `COALESCE(substring(${tabla}.hour from '^\\s*(\\d{1,2}):\\d{2}')::int::text, ${tabla}.hour)`;
-
-// Devuelve los ids a reintentar, del más antiguo al más nuevo: el primer
-// reporte de cada pozo, fecha y hora que siga sin enviarse y cuya hora no tenga
-// ya otro reporte enviado. Solo trae ids, para que la consulta no cargue
-// filas completas en memoria.
-const buscarPendientes = async ({ ahora = new Date(), maximo = MAXIMO_POR_CORRIDA } = {}) => {
-  const conGracia = ahora.getTime() - HORAS_DE_GRACIA * 60 * 60 * 1000;
-  const inicioDelDia = moment(ahora).tz(ZONA).startOf('day').valueOf();
-  // `createdAt < hasta`, para que un reporte creado justo a medianoche cuente
-  // como del día de la corrida.
-  const hasta = new Date(Math.min(conGracia, inicioDelDia));
-  const desde = new Date(ahora.getTime() - DIAS_DE_VENTANA * 24 * 60 * 60 * 1000);
-
-  const [filas] = await sequelize.query(
-    `
-    WITH candidatos AS (
-      SELECT d.id, d.code, d.date, d."createdAt", ${HORA_SQL('d')} AS hora
-        FROM "wellData" d
-        JOIN wells w ON w.code = d.code
-       WHERE d.sent = false
-         AND d."createdAt" >= :desde
-         AND d."createdAt" < :hasta
-         AND w."isActived" = true
-         AND (w."editStatusDate" IS NULL OR d."createdAt" >= w."editStatusDate")
-    ),
-    horas_enviadas AS (
-      SELECT DISTINCT s.code, s.date, ${HORA_SQL('s')} AS hora
-        FROM "wellData" s
-       WHERE s.sent = true
-         AND (s.code, s.date) IN (SELECT code, date FROM candidatos)
-    ),
-    primero_de_cada_hora AS (
-      SELECT DISTINCT ON (c.code, c.date, c.hora) c.id, c."createdAt"
-        FROM candidatos c
-       WHERE NOT EXISTS (
-               SELECT 1 FROM horas_enviadas h
-                WHERE h.code = c.code AND h.date = c.date AND h.hora = c.hora
-             )
-       ORDER BY c.code, c.date, c.hora, c."createdAt", c.id
-    )
-    SELECT id FROM primero_de_cada_hora
-     ORDER BY "createdAt", id
-     LIMIT :maximo
-    `,
-    { replacements: { desde, hasta, maximo } }
-  );
-
-  return filas.map((fila) => fila.id);
-};
+const buscarPendientes = ({ ahora = new Date(), maximo = MAXIMO_POR_CORRIDA } = {}) =>
+  buscarEnLaBase({ ahora, maximo });
 
 // El reporte y su pozo, si el reporte sigue sin enviarse y el pozo sigue
 // activo. Si no, ambos vienen en `null`.
@@ -131,14 +76,18 @@ const reintentarPendientes = async ({
     return { omitida: true };
   }
   enCurso = true;
+  let error = null;
 
   try {
+    // Si la búsqueda falla, la corrida queda registrada como terminada con
+    // error, para que la alerta de las 08:00 lo informe.
+    iniciarCorrida({ inicio: ahora, pendientes: 0, alcanzoElMaximo: false });
     const ids = await buscarPendientes({ ahora, maximo });
     console.log(
       `[reintento-dga] ${ids.length} medición(es) pendiente(s) de los últimos ${DIAS_DE_VENTANA} días`
     );
 
-    const resultado = { pendientes: ids.length, aceptados: 0, fallidos: 0, omitidos: 0 };
+    const estado = iniciarCorrida({ inicio: ahora, pendientes: ids.length, alcanzoElMaximo: ids.length >= maximo });
     let transmitioAntes = false;
 
     for (const id of ids) {
@@ -154,27 +103,33 @@ const reintentarPendientes = async ({
           ({ reporte, pozo } = await leerEnviable(id));
         }
         if (!reporte) {
-          resultado.omitidos += 1;
+          estado.omitidos += 1;
           continue;
         }
         transmitioAntes = true;
 
         await processAndPostData(reporte, pozo);
-        resultado.aceptados += 1;
+        estado.aceptados += 1;
       } catch (error) {
         // Puede ser un rechazo de la DGA, un timeout o un error propio, como
         // la base caída: en ningún caso se corta la corrida. Solo se registra
         // el mensaje, porque un error de axios completo podría arrastrar el
         // cuerpo enviado, que lleva las credenciales DGA del pozo.
-        resultado.fallidos += 1;
+        estado.fallidos += 1;
         const detalle = reporte ? ` (${reporte.code} ${reporte.date} ${reporte.hour})` : '';
         console.error(`[reintento-dga] falló el reintento del reporte ${id}${detalle}: ${error.message}`);
       }
     }
 
+    const { pendientes, aceptados, fallidos, omitidos } = estado;
+    const resultado = { pendientes, aceptados, fallidos, omitidos };
     console.log('[reintento-dga] resultado:', resultado);
     return resultado;
+  } catch (e) {
+    error = e.message;
+    throw e;
   } finally {
+    terminarCorrida({ error });
     enCurso = false;
   }
 };

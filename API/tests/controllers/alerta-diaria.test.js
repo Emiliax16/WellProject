@@ -7,20 +7,31 @@
 // estaban en rojo aparecen como recordatorio dentro de ese correo, pero no lo
 // disparan.
 //
+// El chequeo diario también avisa de las mediciones de ayer que la DGA no
+// aceptó, ni al recibirlas ni en el reintento de las 03:00 (#70). Las más
+// antiguas aparecen como recordatorio, pero no disparan el correo.
+//
 // El envío manual (`POST /monitoring/send-alert-email`) conserva el
 // comportamiento de siempre: lista todos los pozos en rojo.
 //
-// Sin base ni red: los modelos, nodemailer y node-cron van mockeados.
+// Sin base ni red: los modelos, la consulta de pendientes, nodemailer y
+// node-cron van mockeados. La consulta se prueba contra Postgres en
+// `tests/db/mediciones-sin-aceptar.test.js`.
 
 const mockWellFindAll = jest.fn();
 const mockWellDataFindOne = jest.fn();
 const mockSendMail = jest.fn();
+const mockResumenSinAceptar = jest.fn();
 
 jest.mock('../../models', () => ({
   well: { findAll: (...a) => mockWellFindAll(...a) },
   wellData: { findOne: (...a) => mockWellDataFindOne(...a) },
   client: {},
   user: {},
+}));
+jest.mock('../../src/services/wellData/pendientesDga.service', () => ({
+  resumenSinAceptar: (...a) => mockResumenSinAceptar(...a),
+  DIAS_DE_VENTANA: 35,
 }));
 jest.mock('nodemailer', () => ({
   createTransport: () => ({ sendMail: (...a) => mockSendMail(...a) }),
@@ -50,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers({ now: AHORA, doNotFake: ['nextTick', 'setImmediate'] });
   mockSendMail.mockResolvedValue({});
+  mockResumenSinAceptar.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -191,6 +203,163 @@ describe('runAlertCheck en el chequeo diario', () => {
   });
 });
 
+describe('runAlertCheck con mediciones que no llegaron a la DGA', () => {
+  const chequeoDiario = () => runAlertCheck({ soloNuevos: true });
+  const pozoAlDia = [{ code: 'OB-0902-639', name: 'Parque Alviso', ultimoReporte: haceMinutos(20) }];
+
+  const sinEntrega = (campos) => ({
+    code: 'OB-0902-639',
+    name: 'Parque Alviso',
+    deAyer: 2,
+    total: 5,
+    masAntigua: new Date('2026-11-10T08:27:00.000Z'),
+    ...campos,
+  });
+
+  it('escribe si alguna medición de ayer no llegó, aunque ningún pozo esté en rojo', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega()]);
+
+    const resultado = await chequeoDiario();
+
+    expect(resultado).toEqual({
+      sent: true,
+      criticalCount: 0,
+      newCount: 0,
+      undeliveredWells: 1,
+      undeliveredYesterday: 2,
+    });
+    const correo = mockSendMail.mock.calls[0][0];
+    expect(correo.subject).toBe('[Promedición] 1 pozo(s) con mediciones que no llegaron a la DGA');
+    expect(correo.html).toContain('Mediciones que no llegaron a la DGA');
+    expect(correo.html).not.toContain('Pozos sin comunicación hace más de 6 horas');
+  });
+
+  it('muestra por pozo las horas de ayer, el total pendiente y la medición más antigua', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega()]);
+
+    await chequeoDiario();
+
+    const { html } = mockSendMail.mock.calls[0][0];
+    expect(html).toContain('<td style="padding:8px;border:1px solid #ddd;">Parque Alviso</td>');
+    expect(html).toContain('<td style="padding:8px;border:1px solid #ddd;text-align:right;">2</td>');
+    expect(html).toContain('<td style="padding:8px;border:1px solid #ddd;text-align:right;">5</td>');
+    expect(html).toContain('10-11-26, 5:27:00');
+    expect(html).toContain('hasta 35 días hacia atrás');
+    expect(html).toContain('el titular debe informarla con un ticket');
+  });
+
+  it('no escribe si solo quedan mediciones pendientes de días anteriores a ayer', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega({ deAyer: 0, total: 3 })]);
+
+    const resultado = await chequeoDiario();
+
+    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(resultado).toEqual({
+      sent: false,
+      criticalCount: 0,
+      newCount: 0,
+      undeliveredWells: 1,
+      undeliveredYesterday: 0,
+      message: 'No hay pozos en estado crítico.',
+    });
+  });
+
+  it('recuerda las pendientes antiguas cuando el correo sale por un pozo en rojo', async () => {
+    configurarPozos([{ code: 'OB-0902-1553', name: 'Pozo 1', ultimoReporte: haceMinutos(10 * 60) }]);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega({ deAyer: 0, total: 3 })]);
+
+    await chequeoDiario();
+
+    const correo = mockSendMail.mock.calls[0][0];
+    expect(correo.subject).toBe('[Promedición] 1 pozo(s) nuevo(s) sin comunicación hace más de 6 horas');
+    expect(correo.html).toContain('Pozos sin comunicación hace más de 6 horas');
+    expect(correo.html).toContain('Mediciones que no llegaron a la DGA');
+  });
+
+  it('junta en el asunto los pozos en rojo y los de entrega cuando hay de ambos', async () => {
+    configurarPozos([{ code: 'OB-0902-1553', name: 'Pozo 1', ultimoReporte: haceMinutos(10 * 60) }]);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega(), sinEntrega({ code: 'OB-1304-1749', name: 'Pozo Norte', deAyer: 1 })]);
+
+    await chequeoDiario();
+
+    expect(mockSendMail.mock.calls[0][0].subject).toBe(
+      '[Promedición] 1 pozo(s) nuevo(s) sin comunicación y 2 con mediciones que no llegaron a la DGA'
+    );
+  });
+
+  it('no recuerda los pozos caídos de antes si el correo sale solo por la entrega', async () => {
+    configurarPozos([{ code: 'OB-0701-1496', name: 'Fuente de Agua N°1', ultimoReporte: haceMinutos(44 * 24 * 60) }]);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega()]);
+
+    await chequeoDiario();
+
+    const { html } = mockSendMail.mock.calls[0][0];
+    expect(html).not.toContain('Fuente de Agua N°1');
+    expect(html).not.toContain('Otros pozos que siguen sin comunicación');
+  });
+
+  it('consulta la entrega con la hora del chequeo', async () => {
+    configurarPozos(pozoAlDia);
+
+    await chequeoDiario();
+
+    expect(mockResumenSinAceptar).toHaveBeenCalledWith({ ahora: AHORA });
+  });
+
+  it('cuenta en el asunto solo los pozos con horas de ayer, aunque la tabla traiga también recordatorios', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([
+      sinEntrega({ deAyer: 1 }),
+      sinEntrega({ code: 'OB-1304-1749', name: 'Pozo Norte', deAyer: 0, total: 4 }),
+    ]);
+
+    const resultado = await chequeoDiario();
+
+    const correo = mockSendMail.mock.calls[0][0];
+    expect(correo.subject).toBe('[Promedición] 1 pozo(s) con mediciones que no llegaron a la DGA');
+    expect(correo.html).toContain('Pozo Norte');
+    expect(correo.html).toContain('Una fila con 0 horas de ayer solo tiene pendientes de días anteriores.');
+    expect(resultado).toMatchObject({ undeliveredWells: 2, undeliveredYesterday: 1 });
+  });
+
+  it('escapa el código del pozo en la sección de entrega', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega({ code: '<i>OB-1</i>' })]);
+
+    await chequeoDiario();
+
+    const { html } = mockSendMail.mock.calls[0][0];
+    expect(html).toContain('&lt;i&gt;OB-1&lt;/i&gt;');
+    expect(html).not.toContain('<i>OB-1</i>');
+  });
+
+  it('escapa el nombre del pozo en la sección de entrega', async () => {
+    configurarPozos(pozoAlDia);
+    mockResumenSinAceptar.mockResolvedValue([sinEntrega({ name: '<b>Pozo</b>' })]);
+
+    await chequeoDiario();
+
+    expect(mockSendMail.mock.calls[0][0].html).toContain('&lt;b&gt;Pozo&lt;/b&gt;');
+  });
+});
+
+describe('runAlertCheck si falla la revisión de la entrega', () => {
+  it('manda igual la alerta de un pozo nuevo en rojo, avisando que no se pudo revisar la entrega', async () => {
+    configurarPozos([{ code: 'OB-0902-1553', name: 'Pozo 1', ultimoReporte: haceMinutos(10 * 60) }]);
+    mockResumenSinAceptar.mockRejectedValue(new Error('Connection terminated unexpectedly'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const resultado = await runAlertCheck({ soloNuevos: true });
+
+    expect(resultado).toMatchObject({ sent: true, newCount: 1 });
+    expect(mockSendMail.mock.calls[0][0].html).toContain('No se pudo revisar la entrega a la DGA en este chequeo.');
+    console.error.mockRestore();
+  });
+});
+
 describe('runAlertCheck en el envío manual', () => {
   it('lista todos los pozos en rojo, nuevos y antiguos, como antes', async () => {
     configurarPozos([
@@ -206,6 +375,15 @@ describe('runAlertCheck en el envío manual', () => {
     expect(correo.html).toContain('Pozo 1');
     expect(correo.html).toContain('Fuente de Agua N°1');
     expect(correo.html).not.toContain('Otros pozos que siguen sin comunicación');
+  });
+
+  it('no revisa la entrega a la DGA', async () => {
+    configurarPozos([{ code: 'OB-0902-639', name: 'Parque Alviso', ultimoReporte: haceMinutos(20) }]);
+
+    const resultado = await runAlertCheck();
+
+    expect(mockResumenSinAceptar).not.toHaveBeenCalled();
+    expect(resultado).toEqual({ sent: false, criticalCount: 0, newCount: 0, message: 'No hay pozos en estado crítico.' });
   });
 
   it('escribe aunque todos los pozos en rojo ya estuvieran caídos', async () => {

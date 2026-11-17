@@ -805,8 +805,10 @@ function errorHandler(err, req, res, next) {
 Reenvía a la DGA los reportes que no recibieron `00`. Corre dentro de la API, una vez al día a las 03:00 (`DGA_RETRY_CRON_SCHEDULE`), y reemplaza al SENDER. Sigue la sección 6 del documento de transmisión de la DGA:
 
 - **§6.2:** cada medición fallida se reenvía una vez al día, a partir del día siguiente, hasta recibir `00`. La ventana es de 35 días.
-- **§6.1:** las mediciones atrasadas se envían de a una, con 5 minutos entre cada envío. Cada corrida envía como máximo 250, y el resto queda para el día siguiente.
+- **§6.1:** las mediciones atrasadas se envían de a una, con 5 minutos entre cada envío. Cada corrida envía como máximo 250, y el resto queda para el día siguiente. Van primero las de ayer y después las más antiguas, para que cada falla nueva tenga su reintento al día siguiente aunque haya mucha cola atrasada.
 - **§6.3:** no se retransmite lo que la DGA ya tiene. Se envía una sola medición por pozo, fecha y hora (la primera que llegó), y se omite toda hora que ya tenga un reporte enviado.
+
+Qué cuenta como pendiente lo define `src/services/wellData/pendientesDga.service.js`, que comparten el reintento y la alerta de las 08:00. La alerta avisa si alguna medición de ayer sigue sin aceptarse después del reintento (#70).
 
 Solo toma reportes de pozos activos, creados en días anteriores al de la corrida (y hace más de 2 horas, para dar tiempo al envío automático) y después de la última activación del pozo (`editStatusDate`, que el modelo `well` fija cada vez que cambia `isActived`). Un rechazo o un error no detiene la corrida: se registra y sigue con el siguiente. `processAndPostData` relee el reporte antes de decidir, para que nadie que lo tenga cargado de antes retransmita lo que otro ya envió.
 
